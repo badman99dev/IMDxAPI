@@ -56,7 +56,8 @@ app = FastAPI(
     title="IMDxAPI",
     description="IMDx API for accessing movie and TV show data",
     version="2.7.12",
-    contact={"name": "Telegram Group", "url": "https://t.me/imdbapi"},
+    contact={"name": "IMDxAPI Source Code", "url": "https://github.com/badman99dev/IMDxAPI"},
+    external_docs={"description": "View Source Code", "url": "https://github.com/badman99dev/IMDxAPI"},
 )
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"

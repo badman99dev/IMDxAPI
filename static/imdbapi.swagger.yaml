@@ -4,8 +4,11 @@ info:
   description: IMDx API for accessing movie and TV show data
   version: 2.7.12
   contact:
-    name: Telegram Group
-    url: https://t.me/imdbapi
+    name: IMDxAPI Source Code
+    url: https://github.com/badman99dev/IMDxAPI
+externalDocs:
+  description: View Source Code
+  url: https://github.com/badman99dev/IMDxAPI
 tags:
   - name: Title
     description: Operations related to titles (movies, TV shows, etc.)

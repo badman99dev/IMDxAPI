@@ -70,6 +70,30 @@ app.add_middleware(
 )
 
 
+# --- Tiered CDN caching (function-response headers, universal) ---
+CACHE_RULES = [
+    (86400, ("parentsGuide", "/certificates", "/akas", "/releaseDates", "/trivia", "/interests")),
+    (3600, ("/titles/", "/names/", "/seasons", "/images", "awardNominations", "companyCredits", "/relationships")),
+    (300, ("/titles", "/credits", "/episodes", "/videos", "/boxOffice", "batchGet", "/filmography")),
+    (60, ("/chart/starmeter", "/search/titles")),
+]
+
+
+@app.middleware("http")
+async def add_cache_headers(request: Request, call_next):
+    resp = await call_next(request)
+    if request.method != "GET" or resp.status_code not in (200, 404) or request.url.path.startswith(("/docs", "/static", "/openapi")):
+        return resp
+    ttl = 60
+    for duration, keys in CACHE_RULES:
+        if any(k in request.url.path for k in keys):
+            ttl = duration
+            break
+    resp.headers["CDN-Cache-Control"] = f"max-age={ttl}, stale-while-revalidate={ttl}"
+    resp.headers["Cache-Control"] = f"public, s-maxage={ttl}"
+    return resp
+
+
 async def get_client() -> ImdbClient:
     """Request-scoped IMDb GraphQL client."""
     client = ImdbClient()

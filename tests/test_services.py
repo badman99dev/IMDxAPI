@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import unittest
 
 from app.services.imdb_client import ImdbClient
-from app.services import title_service, name_service
+from app.services import title_service, name_service, title_sub_service
 
 
 class TestTitleService(unittest.TestCase):
@@ -64,6 +64,109 @@ class TestTitleService(unittest.TestCase):
         ids1 = {t.id for t in p1.titles}
         ids2 = {t.id for t in p2.titles}
         self.assertTrue(ids1.isdisjoint(ids2))
+
+
+class TestTitleSubEndpoints(unittest.TestCase):
+    """Phase-2: Tiffara title sub-endpoints."""
+
+    def setUp(self):
+        self.loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self.loop)
+        self.client = ImdbClient(cache_ttl=120)
+
+    def tearDown(self):
+        self.loop.run_until_complete(self.client.close())
+        self.loop.close()
+
+    def test_seasons(self):
+        r = self.loop.run_until_complete(
+            title_sub_service.list_title_seasons(self.client, "tt0944947")
+        )
+        self.assertGreater(len(r.seasons), 0)
+        self.assertTrue(all(s.episodeCount for s in r.seasons))
+
+    def test_episodes(self):
+        r = self.loop.run_until_complete(
+            title_sub_service.list_title_episodes(self.client, "tt0944947", season="1", limit=3)
+        )
+        self.assertGreater(r.totalCount, 0)
+        self.assertEqual(len(r.episodes), 3)
+        self.assertTrue(all(e.season == "1" for e in r.episodes))
+        self.assertIsNotNone(r.episodes[1].title)
+
+    def test_credits(self):
+        r = self.loop.run_until_complete(
+            title_sub_service.list_title_credits(self.client, "tt1375666", categories=["actor"], limit=3)
+        )
+        self.assertGreater(r.totalCount, 0)
+        self.assertTrue(all(c.name.id for c in r.credits))
+        self.assertIsNotNone(r.credits[0].characters)
+
+    def test_release_dates(self):
+        r = self.loop.run_until_complete(
+            title_sub_service.list_title_release_dates(self.client, "tt1375666", limit=2)
+        )
+        self.assertGreater(len(r.releaseDates), 0)
+        self.assertTrue(r.nextPageToken)
+
+    def test_akas(self):
+        r = self.loop.run_until_complete(title_sub_service.list_title_akas(self.client, "tt1375666"))
+        self.assertGreater(len(r.akas), 0)
+
+    def test_images(self):
+        r = self.loop.run_until_complete(
+            title_sub_service.list_title_images(self.client, "tt1375666", types=["poster"], limit=3)
+        )
+        self.assertGreater(r.totalCount, 0)
+        self.assertTrue(all(i.type == "poster" for i in r.images))
+
+    def test_videos(self):
+        r = self.loop.run_until_complete(title_sub_service.list_title_videos(self.client, "tt1375666", limit=3))
+        self.assertGreater(len(r.videos), 0)
+        self.assertEqual(r.videos[0].type, "trailer")
+
+    def test_awards(self):
+        r = self.loop.run_until_complete(
+            title_sub_service.list_title_award_nominations(self.client, "tt1375666", limit=3)
+        )
+        self.assertGreater(len(r.awardNominations), 0)
+        self.assertIsNotNone(r.awardNominations[0].event.name)
+
+    def test_parents_guide(self):
+        r = self.loop.run_until_complete(
+            title_sub_service.list_title_parents_guide(self.client, "tt1375666")
+        )
+        self.assertGreater(len(r.parentsGuide), 0)
+        cats = {p.category for p in r.parentsGuide}
+        self.assertIn("SEXUAL_CONTENT", cats)
+
+    def test_certificates(self):
+        r = self.loop.run_until_complete(
+            title_sub_service.list_title_certificates(self.client, "tt1375666")
+        )
+        self.assertGreater(len(r.certificates), 0)
+        self.assertTrue(all(c.country.code for c in r.certificates))
+
+    def test_company_credits(self):
+        r = self.loop.run_until_complete(
+            title_sub_service.list_title_company_credits(self.client, "tt1375666", limit=3)
+        )
+        self.assertGreater(len(r.companyCredits), 0)
+        self.assertTrue(all(c.company.name for c in r.companyCredits))
+
+    def test_box_office(self):
+        r = self.loop.run_until_complete(
+            title_sub_service.get_title_box_office(self.client, "tt1375666")
+        )
+        self.assertIsNotNone(r)
+        self.assertEqual(r.domesticGross.currency, "USD")
+        self.assertIsNotNone(r.productionBudget)
+
+    def test_box_office_not_found(self):
+        r = self.loop.run_until_complete(
+            title_sub_service.get_title_box_office(self.client, "tt9999999")
+        )
+        self.assertIsNone(r)
 
 
 class TestNameService(unittest.TestCase):

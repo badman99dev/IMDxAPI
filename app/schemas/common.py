@@ -77,9 +77,9 @@ class imdbapiMetacritic(BaseModel):
 
 
 class imdbapiMoney(BaseModel):
-    """A monetary amount with a currency."""
+    """A monetary amount with a currency (Tiffara serializes amount as string)."""
 
-    amount: Optional[float] = None
+    amount: Optional[str] = None
     currency: Optional[str] = None
 
 

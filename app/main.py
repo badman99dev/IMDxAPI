@@ -16,6 +16,20 @@ from .schemas.title import (
     imdbapiSearchTitlesResponse,
     imdbapiTitle,
 )
+from .schemas.sub import (
+    imdbapiBoxOffice,
+    imdbapiListTitleAKAsResponse,
+    imdbapiListTitleAwardNominationsResponse,
+    imdbapiListTitleCertificatesResponse,
+    imdbapiListTitleCompanyCreditsResponse,
+    imdbapiListTitleCreditsResponse,
+    imdbapiListTitleEpisodesResponse,
+    imdbapiListTitleImagesResponse,
+    imdbapiListTitleParentsGuideResponse,
+    imdbapiListTitleReleaseDatesResponse,
+    imdbapiListTitleSeasonsResponse,
+    imdbapiListTitleVideosResponse,
+)
 from .schemas.name import imdbapiName
 from .services.imdb_client import (
     ImdbClient,
@@ -23,7 +37,7 @@ from .services.imdb_client import (
     ImdbNotFoundError,
     ImdbRateLimitError,
 )
-from .services import title_service, name_service
+from .services import title_service, name_service, title_sub_service
 
 app = FastAPI(
     title="IMDxAPI",
@@ -133,6 +147,212 @@ async def list_titles(
 )
 async def get_title(titleId: str, client: ImdbClient = Depends(get_client)):
     result = await title_service.get_title(client, titleId)
+    if not result:
+        raise ImdbNotFoundError(f"Title {titleId} not found")
+    return result
+
+
+@app.get(
+    "/titles/{titleId}/credits",
+    response_model=imdbapiListTitleCreditsResponse,
+    response_model_exclude_none=True,
+    summary="List credits for a title",
+    description="Retrieve the credits associated with a specific title.",
+    tags=["Title"],
+)
+async def list_title_credits(
+    titleId: str,
+    categories: Optional[List[str]] = Query(None),
+    pageSize: int = Query(20, ge=1, le=50),
+    pageToken: Optional[str] = Query(None),
+    client: ImdbClient = Depends(get_client),
+):
+    return await title_sub_service.list_title_credits(
+        client, titleId, categories=categories, limit=pageSize, page_token=pageToken
+    )
+
+
+@app.get(
+    "/titles/{titleId}/releaseDates",
+    response_model=imdbapiListTitleReleaseDatesResponse,
+    response_model_exclude_none=True,
+    summary="List release dates for a title",
+    description="Retrieve the release dates associated with a specific title.",
+    tags=["Title"],
+)
+async def list_title_release_dates(
+    titleId: str,
+    pageSize: int = Query(20, ge=1, le=50),
+    pageToken: Optional[str] = Query(None),
+    client: ImdbClient = Depends(get_client),
+):
+    return await title_sub_service.list_title_release_dates(
+        client, titleId, limit=pageSize, page_token=pageToken
+    )
+
+
+@app.get(
+    "/titles/{titleId}/akas",
+    response_model=imdbapiListTitleAKAsResponse,
+    response_model_exclude_none=True,
+    summary="List AKAs for a title",
+    description="Retrieve the alternative titles (AKAs) associated with a specific title.",
+    tags=["Title"],
+)
+async def list_title_akas(titleId: str, client: ImdbClient = Depends(get_client)):
+    return await title_sub_service.list_title_akas(client, titleId)
+
+
+@app.get(
+    "/titles/{titleId}/seasons",
+    response_model=imdbapiListTitleSeasonsResponse,
+    response_model_exclude_none=True,
+    summary="List seasons for a title",
+    description="Retrieve the seasons associated with a specific title.",
+    tags=["Title"],
+)
+async def list_title_seasons(titleId: str, client: ImdbClient = Depends(get_client)):
+    return await title_sub_service.list_title_seasons(client, titleId)
+
+
+@app.get(
+    "/titles/{titleId}/episodes",
+    response_model=imdbapiListTitleEpisodesResponse,
+    response_model_exclude_none=True,
+    summary="List episodes for a title",
+    description="Retrieve the episodes associated with a specific title.",
+    tags=["Title"],
+)
+async def list_title_episodes(
+    titleId: str,
+    season: Optional[str] = Query(None),
+    pageSize: int = Query(20, ge=1, le=50),
+    pageToken: Optional[str] = Query(None),
+    client: ImdbClient = Depends(get_client),
+):
+    return await title_sub_service.list_title_episodes(
+        client, titleId, season=season, limit=pageSize, page_token=pageToken
+    )
+
+
+@app.get(
+    "/titles/{titleId}/images",
+    response_model=imdbapiListTitleImagesResponse,
+    response_model_exclude_none=True,
+    summary="List images for a title",
+    description="Retrieve the images associated with a specific title.",
+    tags=["Title"],
+)
+async def list_title_images(
+    titleId: str,
+    types: Optional[List[str]] = Query(None),
+    pageSize: int = Query(20, ge=1, le=50),
+    pageToken: Optional[str] = Query(None),
+    client: ImdbClient = Depends(get_client),
+):
+    return await title_sub_service.list_title_images(
+        client, titleId, types=types, limit=pageSize, page_token=pageToken
+    )
+
+
+@app.get(
+    "/titles/{titleId}/videos",
+    response_model=imdbapiListTitleVideosResponse,
+    response_model_exclude_none=True,
+    summary="List videos for a title",
+    description="Retrieve the videos associated with a specific title.",
+    tags=["Title"],
+)
+async def list_title_videos(
+    titleId: str,
+    pageSize: int = Query(20, ge=1, le=50),
+    pageToken: Optional[str] = Query(None),
+    client: ImdbClient = Depends(get_client),
+):
+    return await title_sub_service.list_title_videos(
+        client, titleId, limit=pageSize, page_token=pageToken
+    )
+
+
+@app.get(
+    "/titles/{titleId}/awardNominations",
+    response_model=imdbapiListTitleAwardNominationsResponse,
+    response_model_exclude_none=True,
+    summary="List award nominations for a title",
+    description="Retrieve the award nominations associated with a specific title.",
+    tags=["Title"],
+)
+async def list_title_award_nominations(
+    titleId: str,
+    pageSize: int = Query(20, ge=1, le=50),
+    pageToken: Optional[str] = Query(None),
+    client: ImdbClient = Depends(get_client),
+):
+    return await title_sub_service.list_title_award_nominations(
+        client, titleId, limit=pageSize, page_token=pageToken
+    )
+
+
+@app.get(
+    "/titles/{titleId}/parentsGuide",
+    response_model=imdbapiListTitleParentsGuideResponse,
+    response_model_exclude_none=True,
+    summary="List parents guide for a title",
+    description="Retrieve the parents guide associated with a specific title.",
+    tags=["Title"],
+)
+async def list_title_parents_guide(
+    titleId: str, client: ImdbClient = Depends(get_client)
+):
+    return await title_sub_service.list_title_parents_guide(client, titleId)
+
+
+@app.get(
+    "/titles/{titleId}/certificates",
+    response_model=imdbapiListTitleCertificatesResponse,
+    response_model_exclude_none=True,
+    summary="List certificates for a title",
+    description="Retrieve the certificates associated with a specific title.",
+    tags=["Title"],
+)
+async def list_title_certificates(
+    titleId: str, client: ImdbClient = Depends(get_client)
+):
+    return await title_sub_service.list_title_certificates(client, titleId)
+
+
+@app.get(
+    "/titles/{titleId}/companyCredits",
+    response_model=imdbapiListTitleCompanyCreditsResponse,
+    response_model_exclude_none=True,
+    summary="List company credits for a title",
+    description="Retrieve the company credits associated with a specific title.",
+    tags=["Title"],
+)
+async def list_title_company_credits(
+    titleId: str,
+    categories: Optional[List[str]] = Query(None),
+    pageSize: int = Query(20, ge=1, le=50),
+    pageToken: Optional[str] = Query(None),
+    client: ImdbClient = Depends(get_client),
+):
+    return await title_sub_service.list_title_company_credits(
+        client, titleId, categories=categories, limit=pageSize, page_token=pageToken
+    )
+
+
+@app.get(
+    "/titles/{titleId}/boxOffice",
+    response_model=imdbapiBoxOffice,
+    response_model_exclude_none=True,
+    summary="Get box office information for a title",
+    description="Retrieve the box office information associated with a specific title.",
+    tags=["Title"],
+)
+async def get_title_box_office(
+    titleId: str, client: ImdbClient = Depends(get_client)
+):
+    result = await title_sub_service.get_title_box_office(client, titleId)
     if not result:
         raise ImdbNotFoundError(f"Title {titleId} not found")
     return result

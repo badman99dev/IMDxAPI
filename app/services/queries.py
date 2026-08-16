@@ -5,6 +5,8 @@ imdbGraphQLPHP (duck7000) and verified to return real data from
 `https://api.graphql.imdb.com/`.
 """
 
+from typing import Optional
+
 # --- Title detail (single combined call) ---
 GET_TITLE_QUERY = """
 query GetTitle($id: ID!) {
@@ -141,6 +143,323 @@ query AdvancedSearch($first: Int!, $after: String) {
   }
 }
 """
+
+# --------------------------------------------------------------------------- #
+# Phase-2: Title sub-endpoints (verified against api.graphql.imdb.com)
+# --------------------------------------------------------------------------- #
+
+# --- Credits (optional category filter + cursor pagination) ---
+def credits_query(limit: int, after: Optional[str] = None, categories: Optional[list] = None) -> str:
+    """Fetch title credits with optional category filter + pagination."""
+    filter_str = ""
+    if categories:
+        joined = '","'.join(categories)
+        filter_str = f', filter: {{categories: ["{joined}"]}}'
+    after_str = f', after: "{after}"' if after else ""
+    return f"""
+query GetCredits($id: ID!) {{
+  title(id: $id) {{
+    credits(first: {limit}{after_str}{filter_str}) {{
+      total
+      edges {{
+        node {{
+          name {{ nameText {{ text }} id primaryImage {{ url width height }} }}
+          category {{ text }}
+          ... on Cast {{
+            characters {{ name }}
+            episodeCredits(first: 9999) {{ total }}
+          }}
+          ... on Crew {{
+            jobs {{ text }}
+            episodeCredits(first: 9999) {{ total }}
+          }}
+        }}
+      }}
+      pageInfo {{ hasNextPage endCursor }}
+    }}
+  }}
+}}
+"""
+
+
+# --- Release dates ---
+GET_RELEASE_DATES_QUERY = """
+query GetReleaseDates($id: ID!, $first: Int!, $after: ID) {
+  title(id: $id) {
+    releaseDates(first: $first, after: $after) {
+      total
+      edges {
+        node {
+          country { id text }
+          day month year
+          attributes { text }
+        }
+      }
+      pageInfo { hasNextPage endCursor }
+    }
+  }
+}
+"""
+
+
+# --- AKAs ---
+GET_AKAS_QUERY = """
+query GetAkas($id: ID!) {
+  title(id: $id) {
+    akas(first: 50) {
+      edges {
+        node {
+          text
+          country { id text }
+          language { id text }
+          attributes { text }
+        }
+      }
+    }
+  }
+}
+"""
+
+
+# --- Seasons ---
+GET_SEASONS_QUERY = """
+query GetSeasons($id: ID!) {
+  title(id: $id) {
+    episodes {
+      displayableSeasons(first: 30) {
+        total
+        edges {
+          node {
+            season
+            text
+          }
+        }
+      }
+    }
+  }
+}
+"""
+
+
+def season_totals_query(seasons: list) -> str:
+    """Build an aliased query returning episode totals for each season."""
+    parts = []
+    for i, s in enumerate(seasons):
+        parts.append(
+            f's{i}: title(id: $id) {{ episodes {{ episodes(first: 1, '
+            f'filter: {{includeSeasons: ["{s}"]}}) {{ total }} }} }}'
+        )
+    return "query GetSeasonTotals($id: ID!) { " + " ".join(parts) + " }"
+
+
+# --- Episodes ---
+def episodes_query(limit: int, after: Optional[str] = None, season: Optional[str] = None) -> str:
+    """Fetch episodes with optional season filter + pagination."""
+    filter_str = ""
+    if season:
+        filter_str = f', filter: {{includeSeasons: ["{season}"]}}'
+    after_str = f', after: "{after}"' if after else ""
+    return f"""
+query GetEpisodes($id: ID!) {{
+  title(id: $id) {{
+    episodes {{
+      episodes(first: {limit}{after_str}{filter_str}) {{
+        total
+        edges {{
+          node {{
+            id
+            titleText {{ text }}
+            plot {{ plotText {{ plainText }} }}
+            primaryImage {{ url width height }}
+            releaseDate {{ day month year }}
+            runtime {{ seconds }}
+            ratingsSummary {{ aggregateRating voteCount }}
+            series {{
+              displayableEpisodeNumber {{
+                episodeNumber {{ episodeNumber text }}
+                displayableSeason {{ season text }}
+              }}
+            }}
+          }}
+        }}
+        pageInfo {{ hasNextPage endCursor }}
+      }}
+    }}
+  }}
+}}
+"""
+
+
+# --- Images (optional type filter + pagination) ---
+def images_query(limit: int, after: Optional[str] = None, types: Optional[list] = None) -> str:
+    """Return a query for title images with optional type filter."""
+    filter_str = ""
+    if types:
+        joined = '","'.join(types)
+        filter_str = f', filter: {{types: ["{joined}"]}}'
+    after_str = f', after: "{after}"' if after else ""
+    return f"""
+query GetImages($id: ID!) {{
+  title(id: $id) {{
+    images(first: {limit}{after_str}{filter_str}) {{
+      total
+      edges {{
+        node {{
+          id
+          url
+          width
+          height
+          type
+        }}
+      }}
+      pageInfo {{ hasNextPage endCursor }}
+    }}
+  }}
+}}
+"""
+
+
+# --- Videos ---
+GET_VIDEOS_QUERY = """
+query GetVideos($id: ID!, $first: Int!) {
+  title(id: $id) {
+    primaryVideos(first: $first) {
+      edges {
+        node {
+          id
+          name { value }
+          description { value }
+          contentType { id }
+          runtime { value }
+          thumbnail { url width height }
+        }
+      }
+    }
+  }
+}
+"""
+
+
+# --- Awards ---
+def awards_query(limit: int, after: Optional[str] = None) -> str:
+    """Fetch award nominations with pagination."""
+    after_str = f', after: "{after}"' if after else ""
+    return f"""
+query GetAwards($id: ID!) {{
+  title(id: $id) {{
+    awardNominations(first: {limit}{after_str}) {{
+      total
+      edges {{
+        node {{
+          id
+          isWinner
+          award {{
+            id
+            text
+            event {{ id text }}
+            eventEdition {{ year }}
+            category {{ text }}
+          }}
+          notes {{ plainText }}
+          awardedEntities {{
+            ... on AwardedTitles {{
+              secondaryAwardNames {{
+                name {{ id nameText {{ text }} }}
+                note {{ plainText }}
+              }}
+            }}
+          }}
+        }}
+      }}
+      pageInfo {{ hasNextPage endCursor }}
+    }}
+  }}
+}}
+"""
+
+
+# --- Parents guide ---
+GET_PARENTS_GUIDE_QUERY = """
+query GetParentsGuide($id: ID!) {
+  title(id: $id) {
+    parentsGuide {
+      categories {
+        category { id text }
+        severity { text votedFor }
+        totalSeverityVotes
+        guideItems(first: 9999) {
+          edges {
+            node {
+              isSpoiler
+              text { plainText }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+"""
+
+
+# --- Certificates ---
+GET_CERTIFICATES_QUERY = """
+query GetCertificates($id: ID!) {
+  title(id: $id) {
+    certificates(first: 50) {
+      total
+      edges {
+        node {
+          rating
+          country { id text }
+          attributes { text }
+        }
+      }
+    }
+  }
+}
+"""
+
+
+# --- Company credits (optional category filter + pagination) ---
+def company_credits_query(limit: int, after: Optional[str] = None, categories: Optional[list] = None) -> str:
+    """Fetch company credits with optional filter + pagination."""
+    filter_str = ""
+    if categories:
+        joined = '","'.join(categories)
+        filter_str = f', filter: {{categories: ["{joined}"]}}'
+    after_str = f', after: "{after}"' if after else ""
+    return f"""
+query GetCompanyCredits($id: ID!) {{
+  title(id: $id) {{
+    companyCredits(first: {limit}{after_str}{filter_str}) {{
+      total
+      edges {{
+        node {{
+          category {{ text }}
+          company {{ id companyText {{ text }} }}
+          attributes {{ text }}
+        }}
+      }}
+      pageInfo {{ hasNextPage endCursor }}
+    }}
+  }}
+}}
+"""
+
+
+# --- Box office ---
+GET_BOX_OFFICE_QUERY = """
+query GetBoxOffice($id: ID!) {
+  title(id: $id) {
+    productionBudget { budget { amount currency } }
+    lifetimeGross(boxOfficeArea: DOMESTIC) { total { amount currency } }
+    lifetimeGrossWorld: lifetimeGross(boxOfficeArea: WORLDWIDE) { total { amount currency } }
+    openingWeekendGross(boxOfficeArea: DOMESTIC) { gross { total { amount currency } } }
+  }
+}
+"""
+
 
 # --- Name detail (combined) ---
 GET_NAME_QUERY = """

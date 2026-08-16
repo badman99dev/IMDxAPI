@@ -24,6 +24,9 @@ query GetTitle($id: ID!) {
     plot { plotText { plainText } }
     countriesOfOrigin { countries { id text } }
     spokenLanguages { spokenLanguages { id text } }
+    interests(first: 20) {
+      edges { node { id primaryText { text } type } }
+    }
     principalCredits {
       credits(limit: 10) {
         name { id nameText { text } }
@@ -554,6 +557,15 @@ query NameRelations($id: ID!, $first: Int!) {
         }
         relationshipType { id text }
       } }
+    }
+    spouses {
+      spouse {
+        name { id nameText { text } primaryImage { url width height }
+              akas(first: 20) { edges { node { text } } }
+              primaryProfessions { category { text } } }
+      }
+      current
+      attributes { text }
     }
   }
 }

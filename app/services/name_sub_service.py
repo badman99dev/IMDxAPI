@@ -274,6 +274,32 @@ async def get_name_relationships(
                 attributes=None,
             )
         )
+    spouses_data = ((data.get("name") or {}).get("spouses")) or []
+    for sp in spouses_data:
+        inner = ((sp.get("spouse") or {}).get("name")) or {}
+        if not inner.get("id"):
+            continue
+        display = (inner.get("nameText") or {}).get("text") or inner.get("id")
+        name = imdbapiName(id=inner.get("id"), displayName=display)
+        if inner.get("primaryImage"):
+            name.primaryImage = _to_image(inner["primaryImage"])
+        akas = [n.get("text") for n in ((inner.get("akas") or {}).get("edges") or [])]
+        akas = [a for a in akas if a]
+        if akas:
+            name.alternativeNames = akas
+        profs = [(p.get("category") or {}).get("text") for p in inner.get("primaryProfessions") or []]
+        cat_id = [(p.get("category") or {}).get("id") for p in inner.get("primaryProfessions") or []]
+        profs = sorted([(c or "").lower() for c in (cat_id or profs) if c])
+        if profs:
+            name.primaryProfessions = profs
+        sp_attrs = [a.get("text") for a in sp.get("attributes") or [] if a.get("text")]
+        relationships.append(
+            imdbapiNameRelationship(
+                name=name,
+                relationType="spouse",
+                attributes=sp_attrs or None,
+            )
+        )
     relationships.sort(
         key=lambda r: {"child": 0, "parent": 1, "sibling": 2, "spouse": 3}.get(
             r.relationType, 9
@@ -470,7 +496,7 @@ def _to_full_name(data: Dict) -> Optional[imdbapiName]:
         birthLocation=(data.get("birthLocation") or {}).get("text"),
         deathDate=_to_precision_date(data.get("deathDate")),
         deathLocation=(data.get("deathLocation") or {}).get("text"),
-        deathReason=data.get("deathCause"),
+        deathReason=(data.get("deathCause") or {}).get("text"),
         alternativeNames=akas or None,
         meterRanking=None,
     )

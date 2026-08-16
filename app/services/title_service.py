@@ -197,6 +197,17 @@ def _to_title(data: Optional[Dict]) -> Optional[imdbapiTitle]:
             languages.append(imdbapiLanguage(code=code, name=text))
 
     interests = None
+    interests_list = []
+    for e in ((data.get("interests") or {}).get("edges") or []):
+        node = e.get("node") or {}
+        interest = imdbapiInterest(
+            id=node.get("id"),
+            name=(node.get("primaryText") or {}).get("text"),
+            isSubgenre=(node.get("type") == "SUBGENRE"),
+        )
+        interests_list.append(interest)
+    if interests_list:
+        interests = interests_list
 
     plot = None
     if data.get("plot") and (data["plot"].get("plotText") or {}).get("plainText"):
@@ -207,7 +218,7 @@ def _to_title(data: Optional[Dict]) -> Optional[imdbapiTitle]:
         type=_map_type((data.get("titleType") or {}).get("text")),
         isAdult=data.get("isAdult") or None,
         primaryTitle=(data.get("titleText") or {}).get("text"),
-        originalTitle=None,
+        originalTitle=(data.get("originalTitleText") or {}).get("text"),
         primaryImage=_to_image(data.get("primaryImage")),
         startYear=(data.get("releaseYear") or {}).get("year"),
         endYear=(data.get("releaseYear") or {}).get("endYear"),
@@ -221,7 +232,7 @@ def _to_title(data: Optional[Dict]) -> Optional[imdbapiTitle]:
         stars=stars or None,
         originCountries=countries or None,
         spokenLanguages=languages or None,
-        interests=None,
+        interests=interests,
     )
 
 

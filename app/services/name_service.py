@@ -82,7 +82,7 @@ def _to_name(data) -> Optional[imdbapiName]:
         birthLocation=(data.get("birthLocation") or {}).get("text"),
         deathDate=_to_date(data.get("deathDate")),
         deathLocation=(data.get("deathLocation") or {}).get("text"),
-        deathReason=data.get("deathCause"),
+        deathReason=(data.get("deathCause") or {}).get("text"),
         alternativeNames=akas or None,
         meterRanking=meter_ranking,
     )

@@ -457,9 +457,11 @@ query GetCompanyCredits($id: ID!) {{
       total
       edges {{
         node {{
-          category {{ text }}
+          category {{ id text }}
           company {{ id companyText {{ text }} }}
           attributes {{ text }}
+          countries {{ id text }}
+          yearsInvolved {{ year endYear }}
         }}
       }}
       pageInfo {{ hasNextPage endCursor }}

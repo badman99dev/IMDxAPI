@@ -467,12 +467,24 @@ async def list_title_company_credits(
     for edge in conn.get("edges") or []:
         node = edge.get("node") or {}
         co = node.get("company") or {}
+        yi = node.get("yearsInvolved") or {}
         credits.append(
             imdbapiCompanyCredit(
                 company=imdbapiCompany(
                     id=co.get("id"), name=(co.get("companyText") or {}).get("text")
                 ),
                 category=(node.get("category") or {}).get("text"),
+                countries=[
+                    imdbapiCountry(code=c.get("id"), name=c.get("text"))
+                    for c in node.get("countries") or []
+                    if c.get("id") or c.get("text")
+                ]
+                or None,
+                yearsInvolved=imdbapiYearsInvolved(
+                    startYear=yi.get("year"), endYear=yi.get("endYear")
+                )
+                if yi.get("year") or yi.get("endYear")
+                else None,
                 attributes=[a.get("text") for a in node.get("attributes") or [] if a.get("text")] or None,
             )
         )

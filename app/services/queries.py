@@ -504,8 +504,7 @@ query NameCredits($id: ID!, $first: Int!, $after: ID, $categories: [ID!]) {
           id
           titleText { text }
           titleType { id text }
-          releaseYear { year }
-          endYear { year }
+          releaseYear { year endYear }
           primaryImage { url width height }
           ratingsSummary { aggregateRating voteCount }
           runtime { seconds }

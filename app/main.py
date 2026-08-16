@@ -31,6 +31,7 @@ from .schemas.sub import (
     imdbapiListTitleVideosResponse,
 )
 from .schemas.name import (
+    imdbapiBatchGetNamesResponse,
     imdbapiGetInterestResponse,
     imdbapiListInterestCategoriesResponse,
     imdbapiListNameFilmographyResponse,
@@ -507,21 +508,11 @@ async def list_name_trivia(
 
 @app.get(
     "/names:batchGet",
-    response_model=imdbapiName,
+    response_model=imdbapiBatchGetNamesResponse,
     response_model_exclude_none=True,
     summary="Batch get names by IDs",
     description="Retrieve details of multiple names using their IMDb IDs. Maximum 5 IDs.",
     tags=["Name"],
-    responses={
-        200: {
-            "description": "Batch result (returns array as 'names').",
-            "content": {
-                "application/json": {
-                    "example": {"names": []},
-                }
-            },
-        }
-    },
 )
 async def batch_get_names(
     nameIds: Optional[List[str]] = Query(
@@ -530,9 +521,9 @@ async def batch_get_names(
     client: ImdbClient = Depends(get_client),
 ):
     if not nameIds:
-        return {"names": []}
+        return imdbapiBatchGetNamesResponse(names=[])
     names = await name_sub_service.batch_get_names(client, nameIds)
-    return {"names": names}
+    return imdbapiBatchGetNamesResponse(names=names)
 
 
 # --------------------------------------------------------------------------- #

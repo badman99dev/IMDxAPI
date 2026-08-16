@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import unittest
 
 from app.services.imdb_client import ImdbClient
-from app.services import title_service, name_service, title_sub_service
+from app.services import title_service, name_service, title_sub_service, name_sub_service
 
 
 class TestTitleService(unittest.TestCase):
@@ -189,6 +189,81 @@ class TestNameService(unittest.TestCase):
     def test_get_name_not_found(self):
         n = self.loop.run_until_complete(name_service.get_name(self.client, "nm9999999"))
         self.assertIsNone(n)
+
+
+class TestNameSubEndpoints(unittest.TestCase):
+    """Phase-3: Tiffara name sub-endpoints + charts + interests."""
+
+    def setUp(self):
+        self.loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self.loop)
+        self.client = ImdbClient(cache_ttl=120)
+
+    def tearDown(self):
+        self.loop.run_until_complete(self.client.close())
+        self.loop.close()
+
+    def test_filmography(self):
+        r = self.loop.run_until_complete(
+            name_sub_service.list_name_filmography(
+                self.client, "nm0634240", categories=["director"], limit=3
+            )
+        )
+        self.assertGreater(r.totalCount, 0)
+        self.assertTrue(all(c.category == "director" for c in r.credits))
+        self.assertIsNotNone(r.credits[0].title.primaryTitle)
+
+    def test_name_images(self):
+        r = self.loop.run_until_complete(
+            name_sub_service.list_name_images(
+                self.client, "nm0634240", types=["poster"], limit=2
+            )
+        )
+        self.assertGreater(r.totalCount, 0)
+        self.assertTrue(all(i.type == "poster" for i in r.images))
+
+    def test_relationships(self):
+        r = self.loop.run_until_complete(
+            name_sub_service.get_name_relationships(self.client, "nm0634240")
+        )
+        self.assertGreater(len(r.relationships), 0)
+        self.assertTrue(all(rel.relationType for rel in r.relationships))
+
+    def test_trivia(self):
+        r = self.loop.run_until_complete(
+            name_sub_service.list_name_trivia(self.client, "nm0634240", limit=2)
+        )
+        self.assertGreater(r.totalCount, 0)
+        self.assertTrue(all(t.text for t in r.triviaEntries))
+        self.assertIsNotNone(r.triviaEntries[0].voteCount)
+
+    def test_starmeter(self):
+        r = self.loop.run_until_complete(
+            name_sub_service.get_starmeter_chart(self.client, limit=3)
+        )
+        self.assertEqual(len(r.names), 3)
+        self.assertTrue(all(n.meterRanking.currentRank for n in r.names))
+        self.assertTrue(r.nextPageToken)
+
+    def test_batch_names(self):
+        names = self.loop.run_until_complete(
+            name_sub_service.batch_get_names(self.client, ["nm0634240", "nm0000138"])
+        )
+        self.assertEqual(len(names), 2)
+        self.assertEqual(names[0].displayName, "Christopher Nolan")
+
+    def test_interest_categories(self):
+        r = self.loop.run_until_complete(
+            name_sub_service.list_interest_categories(self.client)
+        )
+        self.assertGreater(len(r.categories), 0)
+        self.assertTrue(all(cat.interests for cat in r.categories))
+
+    def test_interest_by_id(self):
+        r = self.loop.run_until_complete(name_sub_service.get_interest(self.client, "in0000001"))
+        self.assertIsNotNone(r)
+        self.assertEqual(r.name, "Action")
+        self.assertFalse(r.isSubgenre)
 
 
 if __name__ == "__main__":

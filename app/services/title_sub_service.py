@@ -343,6 +343,23 @@ async def list_title_award_nominations(
         node = edge.get("node") or {}
         a = node.get("award") or {}
         event = a.get("event") or {}
+        nominees = None
+        awarded = node.get("awardedEntities") or {}
+        raw_names = awarded.get("secondaryAwardNames") or awarded.get("awardNames") or []
+        name_list = []
+        for raw in raw_names:
+            nm = raw.get("name") or {}
+            if not nm.get("id"):
+                continue
+            person = imdbapiName(id=nm.get("id"), displayName=(nm.get("nameText") or {}).get("text"))
+            img = nm.get("primaryImage")
+            if img:
+                person.primaryImage = imdbapiImage(
+                    url=img.get("url"), width=img.get("width"), height=img.get("height")
+                )
+            name_list.append(person)
+        if name_list:
+            nominees = name_list
         awards.append(
             imdbapiAwardNomination(
                 event=imdbapiEvent(id=event.get("id"), name=event.get("text")),
@@ -351,6 +368,7 @@ async def list_title_award_nominations(
                 category=(a.get("category") or {}).get("text"),
                 isWinner=node.get("isWinner"),
                 winnerRank=node.get("winningRank"),
+                nominees=nominees,
             )
         )
     stats = None

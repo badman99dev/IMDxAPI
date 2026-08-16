@@ -367,6 +367,18 @@ query GetAwards($id: ID!) {{
             category {{ text }}
           }}
           notes {{ plainText }}
+          awardedEntities {{
+            ... on AwardedTitles {{
+              secondaryAwardNames {{
+                name {{ id nameText {{ text }} primaryImage {{ url width height }} }}
+              }}
+            }}
+            ... on AwardedNames {{
+              awardNames {{
+                name {{ id nameText {{ text }} primaryImage {{ url width height }} }}
+              }}
+            }}
+          }}
         }}
       }}
       pageInfo {{ hasNextPage endCursor }}

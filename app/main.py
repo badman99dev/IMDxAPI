@@ -71,11 +71,13 @@ app.add_middleware(
 
 
 # --- Tiered CDN caching (function-response headers, universal) ---
+# More specific sub-route keywords first, generic prefixes last.
 CACHE_RULES = [
     (86400, ("parentsGuide", "/certificates", "/akas", "/releaseDates", "/trivia", "/interests")),
+    (300, ("/credits", "/episodes", "/videos", "/boxOffice", "batchGet", "/filmography")),
     (3600, ("/titles/", "/names/", "/seasons", "/images", "awardNominations", "companyCredits", "/relationships")),
-    (300, ("/titles", "/credits", "/episodes", "/videos", "/boxOffice", "batchGet", "/filmography")),
-    (60, ("/chart/starmeter", "/search/titles")),
+    (60, ("/search/titles", "/chart/starmeter")),
+    (300, ("/titles")),
 ]
 
 

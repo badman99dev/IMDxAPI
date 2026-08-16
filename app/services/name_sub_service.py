@@ -214,14 +214,19 @@ async def get_name_relationships(
         node = edge.get("node") or {}
         rel_name = node.get("relationName") or {}
         inner = rel_name.get("name") or {}
+        display = (
+            rel_name.get("nameText")
+            or (inner.get("nameText") or {}).get("text")
+            or inner.get("id")
+        )
         relationships.append(
             imdbapiNameRelationship(
                 name=imdbapiName(
                     id=inner.get("id"),
-                    displayName=rel_name.get("nameText") or ((inner.get("nameText") or {}).get("text")),
+                    displayName=display,
                     primaryImage=_to_image(inner.get("primaryImage")),
                 )
-                if (inner or rel_name.get("nameText"))
+                if (inner.get("id") or display)
                 else None,
                 relationType=(node.get("relationshipType") or {}).get("text"),
                 attributes=None,

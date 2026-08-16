@@ -546,7 +546,10 @@ query NameRelations($id: ID!, $first: Int!) {
       total
       edges { node {
         id
-        relationName { nameText name { id primaryImage { url width height } } }
+        relationName {
+          nameText
+          name { id nameText { text } primaryImage { url width height } }
+        }
         relationshipType { id text }
       } }
     }

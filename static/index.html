@@ -21,7 +21,7 @@
       window.ui = SwaggerUIBundle({
         url: base + "/static/imdbapi.swagger.yaml",
         dom_id: "#swagger-ui",
-        deepLinking: true,
+        deepLinking: false,
         presets: [
           SwaggerUIBundle.presets.apis,
           SwaggerUIStandalonePreset
@@ -29,7 +29,8 @@
         plugins: [
           SwaggerUIBundle.plugins.DownloadUrl
         ],
-        layout: "StandaloneLayout"
+        layout: "BaseLayout",
+        validatorUrl: null
       });
     };
   </script>

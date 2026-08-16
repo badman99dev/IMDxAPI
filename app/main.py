@@ -77,6 +77,7 @@ async def root():
 @app.get(
     "/titles",
     response_model=imdbapiListTitlesResponse,
+    response_model_exclude_none=True,
     summary="List titles",
     description="Retrieve a list of titles with optional filters.",
     tags=["Title"],
@@ -124,6 +125,7 @@ async def list_titles(
 @app.get(
     "/titles/{titleId}",
     response_model=imdbapiTitle,
+    response_model_exclude_none=True,
     summary="Get title by ID",
     description="Retrieve a title's details using its IMDb ID.",
     tags=["Title"],
@@ -139,6 +141,7 @@ async def get_title(titleId: str, client: ImdbClient = Depends(get_client)):
 @app.get(
     "/titles:batchGet",
     response_model=imdbapiBatchGetTitlesResponse,
+    response_model_exclude_none=True,
     summary="Batch get titles by IDs",
     description="Retrieve details of multiple titles using their IMDb IDs. Maximum 5 IDs.",
     tags=["Title"],
@@ -158,6 +161,7 @@ async def batch_get_titles(
 @app.get(
     "/search/titles",
     response_model=imdbapiSearchTitlesResponse,
+    response_model_exclude_none=True,
     summary="Search titles by query",
     description="Search for titles using a query string.",
     tags=["Title"],
@@ -176,6 +180,7 @@ async def search_titles(
 @app.get(
     "/names/{nameId}",
     response_model=imdbapiName,
+    response_model_exclude_none=True,
     summary="Get name by ID",
     description="Retrieve a name's details using its IMDb ID.",
     tags=["Name"],

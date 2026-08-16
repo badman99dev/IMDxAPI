@@ -26,12 +26,14 @@ class TestTitleService(unittest.TestCase):
         t = self.loop.run_until_complete(title_service.get_title(self.client, "tt1375666"))
         self.assertIsNotNone(t)
         self.assertEqual(t.primaryTitle, "Inception")
-        self.assertEqual(t.type, "Movie")
+        self.assertEqual(t.type, "movie")
         self.assertEqual(t.startYear, 2010)
         self.assertGreaterEqual(t.rating.aggregateRating, 8.0)
         self.assertIn("Sci-Fi", t.genres)
         self.assertIsNotNone(t.directors)
         self.assertEqual(t.directors[0].displayName, "Christopher Nolan")
+        self.assertIsNotNone(t.stars)
+        self.assertEqual(t.originCountries[0].code, "US")
 
     def test_get_title_not_found(self):
         t = self.loop.run_until_complete(title_service.get_title(self.client, "tt9999999"))
@@ -79,7 +81,7 @@ class TestNameService(unittest.TestCase):
         self.assertIsNotNone(n)
         self.assertEqual(n.displayName, "Christopher Nolan")
         self.assertEqual(n.birthDate.year, 1970)
-        self.assertIn("Director", n.primaryProfessions)
+        self.assertIn("director", n.primaryProfessions)
 
     def test_get_name_not_found(self):
         n = self.loop.run_until_complete(name_service.get_name(self.client, "nm9999999"))

@@ -44,7 +44,8 @@ def _to_name(data) -> Optional[imdbapiName]:
     for p in data.get("primaryProfessions") or []:
         text = (p.get("category") or {}).get("text")
         if text:
-            professions.append(text)
+            professions.append(text.lower())
+    professions.sort()
 
     akas = []
     for edge in (data.get("akas") or {}).get("edges", []):
@@ -54,13 +55,8 @@ def _to_name(data) -> Optional[imdbapiName]:
 
     meter = data.get("meterRanking") or {}
     meter_ranking = None
-    if meter.get("currentRank") is not None:
-        change = meter.get("rankChange") or {}
-        meter_ranking = imdbapiNameMeterRanking(
-            currentRank=meter.get("currentRank"),
-            changeDirection=change.get("changeDirection"),
-            difference=change.get("difference"),
-        )
+    # NOTE: Tiffara's observable /names response omits meterRanking.
+    # Left here for future use but not emitted to match Tiffara output.
 
     height_cm = None
     if data.get("height") and (data["height"].get("measurement") or {}).get("value"):

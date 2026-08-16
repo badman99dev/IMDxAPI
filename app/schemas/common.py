@@ -36,17 +36,21 @@ class imdbapiRating(BaseModel):
 
 
 class imdbapiCountry(BaseModel):
-    """A country with an ID and display text."""
+    """A country with an ISO alpha-2 code and display name."""
 
-    id: Optional[str] = None
-    text: Optional[str] = None
+    code: Optional[str] = Field(
+        None, description='ISO 3166-1 alpha-2 country code, e.g. "US".'
+    )
+    name: Optional[str] = Field(None, description="Country name in English.")
 
 
 class imdbapiLanguage(BaseModel):
-    """A language with an ID and display text."""
+    """A language with an ISO 639-3 code and display name."""
 
-    id: Optional[str] = None
-    text: Optional[str] = None
+    code: Optional[str] = Field(
+        None, description='ISO 639-3 language code, e.g. "eng".'
+    )
+    name: Optional[str] = Field(None, description="Language name in English.")
 
 
 class imdbapiInterest(BaseModel):
@@ -54,6 +58,12 @@ class imdbapiInterest(BaseModel):
 
     id: Optional[str] = None
     name: Optional[str] = None
+    primaryImage: Optional["imdbapiImage"] = None
+    description: Optional[str] = None
+    isSubgenre: Optional[bool] = Field(
+        None, description="True when the interest is a subgenre of another."
+    )
+    similarInterests: Optional[List["imdbapiInterest"]] = None
 
 
 class imdbapiMetacritic(BaseModel):
@@ -81,3 +91,6 @@ class rpcStatus(BaseModel):
     details: Optional[List[dict]] = Field(
         None, description="Additional error details."
     )
+
+
+imdbapiInterest.model_rebuild()

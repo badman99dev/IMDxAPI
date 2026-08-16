@@ -22,9 +22,8 @@ query GetTitle($id: ID!) {
     plot { plotText { plainText } }
     countriesOfOrigin { countries { id text } }
     spokenLanguages { spokenLanguages { id text } }
-    interests(first: 10) { edges { node { id primaryText { text } } } }
     principalCredits {
-      credits(limit: 5) {
+      credits(limit: 10) {
         name { id nameText { text } }
         category { text }
       }
@@ -54,9 +53,13 @@ def batch_titles_query(count: int) -> str:
         args.append(f"$id{i}: ID!")
         parts.append(
             f't{i}: title(id: $id{i}) {{ id titleText {{ text }} '
-            f"titleType {{ text }} releaseYear {{ year endYear }} "
-            f"primaryImage {{ url width height }} "
-            f"ratingsSummary {{ aggregateRating voteCount }} }}"
+            f"originalTitleText {{ text }} titleType {{ text }} "
+            f"releaseYear {{ year endYear }} primaryImage {{ url width height }} "
+            f"runtime {{ seconds }} "
+            f"titleGenres {{ genres {{ genre {{ text }} }} }} "
+            f"ratingsSummary {{ aggregateRating voteCount }} "
+            f"plot {{ plotText {{ plainText }} }} "
+            f"metacritic {{ url metascore {{ score reviewCount }} }} }}"
         )
     return (
         "query BatchGet(" + ", ".join(args) + ") { "
@@ -64,6 +67,28 @@ def batch_titles_query(count: int) -> str:
         + " }"
     )
 
+
+
+# --- Batch name enrichment (fill directors/writers/stars) ---
+def batch_names_query(name_ids: list[str]) -> str:
+    """Fetch full name details for the given IDs via aliased subqueries."""
+    parts = []
+    args = []
+    for i, nid in enumerate(name_ids):
+        args.append(f"$id{i}: ID!")
+        parts.append(
+            f'n{i}: name(id: $id{i}) {{ id nameText {{ text }} '
+            f"primaryImage {{ url width height }} "
+            f"akas(first: 20) {{ edges {{ node {{ text }} }} }} "
+            f"primaryProfessions {{ category {{ text }} }} "
+            f"birthDate {{ dateComponents {{ year month day }} }} "
+            f"deathDate {{ dateComponents {{ year month day }} }} }}"
+        )
+    return (
+        "query BatchNames(" + ", ".join(args) + ") { "
+        + " ".join(parts)
+        + " }"
+    )
 
 
 # --- Main search ---

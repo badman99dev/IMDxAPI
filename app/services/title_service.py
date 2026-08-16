@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
+from ..config import settings
 from ..schemas.common import (
     imdbapiCountry,
     imdbapiImage,
     imdbapiInterest,
     imdbapiLanguage,
     imdbapiMetacritic,
-    imdbapiPrecisionDate,
     imdbapiRating,
 )
 from ..schemas.name import imdbapiName
@@ -21,12 +21,44 @@ from ..schemas.title import (
     imdbapiSearchTitlesResponse,
     imdbapiTitle,
 )
-from ..config import settings
 from . imdb_client import ImdbClient
 from . import queries
 
+# --- IMDb titleType.text -> Tiffara title type mapping ----
+TYPE_MAP = {
+    "Movie": "movie",
+    "TV Series": "tvSeries",
+    "TV Mini Series": "tvMiniSeries",
+    "TV Movie": "tvMovie",
+    "TV Special": "tvSpecial",
+    "TV Episode": "tvEpisode",
+    "Short": "short",
+    "Video": "video",
+    "Video Game": "videoGame",
+    "Podcast Series": "podcastSeries",
+    "Podcast Episode": "podcastEpisode",
+    "Music Video": "musicVideo",
+    "Music": "music",
+    "Documentary": "documentary",
+    "Radio Series": "radioSeries",
+    "Radio Episode": "radioEpisode",
+    "TV Short": "tvShort",
+    "Theatre": "theatre",
+}
 
-# --- Sort mapping: Tiffara sortBy -> GraphQL sort field ----#
+# IMDb two-letter code -> ISO 639-3 (Tiffara language codes)
+LANG_MAP = {
+    "en": "eng", "ja": "jpn", "fr": "fra", "de": "deu", "es": "spa",
+    "it": "ita", "pt": "por", "ru": "rus", "zh": "zho", "hi": "hin",
+    "ko": "kor", "ar": "ara", "nl": "nld", "sv": "swe", "da": "dan",
+    "no": "nor", "fi": "fin", "pl": "pol", "tr": "tur", "el": "ell",
+    "he": "heb", "th": "tha", "vi": "vie", "id": "ind", "ms": "msa",
+    "uk": "ukr", "cs": "ces", "hu": "hun", "ro": "ron", "bg": "bul",
+    "bn": "ben", "ta": "tam", "te": "tel", "pa": "pan", "ur": "urd",
+    "fa": "fas", "sw": "swa",
+}
+
+# --- Sort mapping: Tiffara sortBy -> GraphQL sort enum ----#
 SORT_FIELD_MAP = {
     TitleSortBy.SORT_BY_POPULARITY: "POPULARITY",
     TitleSortBy.SORT_BY_RELEASE_DATE: "RELEASE_DATE",
@@ -36,22 +68,59 @@ SORT_FIELD_MAP = {
 }
 
 
+def _map_type(raw: Optional[str]) -> Optional[str]:
+    if not raw:
+        return None
+    return TYPE_MAP.get(raw, raw.lower())
+
+
 def _to_image(data: Optional[Dict]) -> Optional[imdbapiImage]:
     if not data:
         return None
-    return imdbapiImage(
-        url=data.get("url"),
-        width=data.get("width"),
-        height=data.get("height"),
-        type=data.get("type"),
-    )
+    return imdbapiImage(url=data.get("url"), width=data.get("width"), height=data.get("height"))
 
 
-def _to_name(data: Optional[Dict]) -> Optional[imdbapiName]:
-    """Build a minimal imdbapiName from a principal credit entry."""
+def _to_name(data: Optional[Dict], minimal: bool = True) -> Optional[imdbapiName]:
+    """Build an imdbapiName from a principal credit entry."""
     if not data:
         return None
-    return imdbapiName(id=data.get("id"), displayName=(data.get("nameText") or {}).get("text"))
+    if minimal:
+        return imdbapiName(id=data.get("id"), displayName=(data.get("nameText") or {}).get("text"))
+    name = imdbapiName(id=data.get("id"), displayName=(data.get("nameText") or {}).get("text"))
+    if data.get("primaryImage"):
+        name.primaryImage = _to_image(data["primaryImage"])
+    akas = []
+    for edge in (data.get("akas") or {}).get("edges", []):
+        text = (edge.get("node") or {}).get("text")
+        if text:
+            akas.append(text)
+    if akas:
+        name.alternativeNames = akas
+    professions = []
+    for p in data.get("primaryProfessions") or []:
+        text = (p.get("category") or {}).get("text")
+        if text:
+            professions.append(text.lower())
+    professions.sort()
+    if professions:
+        name.primaryProfessions = professions
+    return name
+
+
+async def _enrich_names(client: ImdbClient, names: List[Dict]) -> Dict[str, Dict]:
+    """Fetch full name details for a list of {id, nameText} dicts."""
+    ids = [n["id"] for n in names]
+    if not ids:
+        return {}
+    query = queries.batch_names_query(ids)
+    variables = {f"id{i}": ids[i] for i in range(len(ids))}
+    data = await client.graphql(query, variables, "BatchNames")
+    result = {}
+    for i in range(len(ids)):
+        node = data.get(f"n{i}")
+        if node:
+            result[ids[i]] = node
+    return result
 
 
 def _to_title(data: Optional[Dict]) -> Optional[imdbapiTitle]:
@@ -61,7 +130,7 @@ def _to_title(data: Optional[Dict]) -> Optional[imdbapiTitle]:
 
     rating = data.get("ratingsSummary") or {}
     rating_obj = None
-    if rating.get("aggregateRating") is not None or rating.get("voteCount") is not None:
+    if rating.get("aggregateRating") is not None:
         rating_obj = imdbapiRating(
             aggregateRating=rating.get("aggregateRating"),
             voteCount=rating.get("voteCount"),
@@ -70,7 +139,7 @@ def _to_title(data: Optional[Dict]) -> Optional[imdbapiTitle]:
     metacritic = data.get("metacritic") or {}
     metacritic_obj = None
     ms = metacritic.get("metascore") or {}
-    if metacritic.get("url") or ms.get("score") is not None:
+    if metacritic.get("url") or ms.get("score") is not None or ms.get("reviewCount") is not None:
         metacritic_obj = imdbapiMetacritic(
             url=metacritic.get("url"),
             score=ms.get("score"),
@@ -85,9 +154,10 @@ def _to_title(data: Optional[Dict]) -> Optional[imdbapiTitle]:
 
     directors: List[imdbapiName] = []
     writers: List[imdbapiName] = []
+    stars: List[imdbapiName] = []
     for pc in data.get("principalCredits") or []:
         for cred in (pc or {}).get("credits", []):
-            name = _to_name(cred.get("name"))
+            name = _to_name(cred.get("name"), minimal=not bool((cred.get("name") or {}).get("primaryProfessions")))
             if not name:
                 continue
             cat = ((cred.get("category") or {}).get("text") or "").lower()
@@ -95,27 +165,47 @@ def _to_title(data: Optional[Dict]) -> Optional[imdbapiTitle]:
                 directors.append(name)
             elif cat == "writer":
                 writers.append(name)
+            elif cat == "actor":
+                stars.append(name)
+    # Tiffara returns stars as the principal 'actors' with full info.
+    # If GraphQL gives no actor category, fall back to other principal credits.
+    if not stars:
+        for pc in data.get("principalCredits") or []:
+            for cred in (pc or {}).get("credits", []):
+                name = _to_name(cred.get("name"), minimal=not bool((cred.get("name") or {}).get("primaryProfessions")))
+                if not name:
+                    continue
+                cat = ((cred.get("category") or {}).get("text") or "").lower()
+                if cat not in ("director", "writer", "actor"):
+                    stars.append(name)
 
-    countries = [
-        imdbapiCountry(id=c.get("id"), text=c.get("text"))
-        for c in (data.get("countriesOfOrigin") or {}).get("countries", [])
-        if c.get("text")
-    ]
-    languages = [
-        imdbapiLanguage(id=l.get("id"), text=l.get("text"))
-        for l in (data.get("spokenLanguages") or {}).get("spokenLanguages", [])
-        if l.get("text")
-    ]
+    countries = []
+    for c in (data.get("countriesOfOrigin") or {}).get("countries", []):
+        text = c.get("text")
+        code = c.get("id")
+        if text or code:
+            countries.append(imdbapiCountry(code=code, name=text))
+    # Tiffara lists US first when present
+    countries.sort(key=lambda c: 0 if c.code == "US" else 1)
 
-    # Plot from different sources in different queries
+    languages = []
+    for l in (data.get("spokenLanguages") or {}).get("spokenLanguages", []):
+        lid = l.get("id") or ""
+        text = l.get("text")
+        code = LANG_MAP.get(lid, lid)
+        if text or code:
+            languages.append(imdbapiLanguage(code=code, name=text))
+
+    interests = None
+
     plot = None
     if data.get("plot") and (data["plot"].get("plotText") or {}).get("plainText"):
         plot = data["plot"]["plotText"]["plainText"]
 
     return imdbapiTitle(
         id=data.get("id"),
-        type=(data.get("titleType") or {}).get("text"),
-        isAdult=data.get("isAdult"),
+        type=_map_type((data.get("titleType") or {}).get("text")),
+        isAdult=data.get("isAdult") or None,
         primaryTitle=(data.get("titleText") or {}).get("text"),
         originalTitle=(data.get("originalTitleText") or {}).get("text"),
         primaryImage=_to_image(data.get("primaryImage")),
@@ -128,7 +218,7 @@ def _to_title(data: Optional[Dict]) -> Optional[imdbapiTitle]:
         plot=plot,
         directors=directors or None,
         writers=writers or None,
-        stars=None,
+        stars=stars or None,
         originCountries=countries or None,
         spokenLanguages=languages or None,
         interests=None,
@@ -160,7 +250,8 @@ def _build_constraints(
     parts = []
 
     if types:
-        joined = '","'.join(types)
+        graphql_types = [_map_type(t) for t in types]
+        joined = '","'.join(graphql_types)
         parts.append(f'titleTypeConstraint: {{ anyTitleTypeIds: ["{joined}"] }}')
 
     if genres:
@@ -203,7 +294,7 @@ def _build_constraints(
 
 
 async def get_title(client: ImdbClient, title_id: str) -> Optional[imdbapiTitle]:
-    """Fetch a single title by ID with a combined call, plus metacritic."""
+    """Fetch a single title by ID with a combined call, plus metacritic & name enrichment."""
     tid = title_id if title_id.startswith("tt") else f"tt{title_id}"
     data = await client.graphql(queries.GET_TITLE_QUERY, {"id": tid}, "GetTitle")
     title_data = data.get("title")
@@ -213,6 +304,21 @@ async def get_title(client: ImdbClient, title_id: str) -> Optional[imdbapiTitle]
     # Fetch metacritic separately
     mc_data = await client.graphql(queries.GET_METACRITIC_QUERY, {"id": tid}, "Metacritic")
     title_data["metacritic"] = (mc_data.get("title") or {}).get("metacritic")
+
+    # Collect principal name IDs for enrichment
+    people = []
+    for pc in title_data.get("principalCredits") or []:
+        for cred in (pc or {}).get("credits", []):
+            nm = cred.get("name") or {}
+            if nm.get("id"):
+                people.append(nm)
+    if people:
+        enriched = await _enrich_names(client, people)
+        for i, pc in enumerate(title_data.get("principalCredits") or []):
+            for cred in (pc or {}).get("credits", []):
+                nm = cred.get("name") or {}
+                if nm.get("id") in enriched:
+                    cred["name"] = enriched[nm["id"]]
 
     return _to_title(title_data)
 

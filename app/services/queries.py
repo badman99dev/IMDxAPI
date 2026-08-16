@@ -541,6 +541,45 @@ query NameCredits($id: ID!, $first: Int!, $after: ID, $categories: [ID!]) {
 """
 
 
+# --- Phase-3: Name episode credits (filmography) ------------------------- #
+# GQL `credits` excludes episode-level credits; creditsV2 nests them under
+# creditedRoles. Fetch per-series episode credits + parent role category.
+NAME_EPISODE_CREDITS_QUERY = """
+query NameEpisodeCredits($id: ID!, $first: Int!, $after: ID) {
+  name(id: $id) {
+    creditsV2(first: $first, after: $after) {
+      total
+      pageInfo { hasNextPage endCursor }
+      edges { node {
+        creditedRoles(first: 100) {
+          edges { node {
+            category { id text }
+            episodeCredits(first: 500) {
+              total
+              edges { node {
+                id
+                title {
+                  id
+                  titleText { text }
+                  titleType { id }
+                  releaseYear { year endYear }
+                  primaryImage { url width height }
+                  ratingsSummary { aggregateRating voteCount }
+                  titleGenres { genres { genre { text } } }
+                  metacritic { metascore { score reviewCount } }
+                  countriesOfOrigin { countries { id text } }
+                }
+              } }
+            }
+          } }
+        }
+      } }
+    }
+  }
+}
+"""
+
+
 # --- Phase-3: Name images ------------------------------------------------ #
 NAME_IMAGES_QUERY = """
 query NameImages($id: ID!, $first: Int!, $after: ID, $types: [ID!]) {

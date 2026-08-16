@@ -129,12 +129,28 @@ def _to_credit_title(data: Dict) -> Optional[imdbapiTitle]:
     )
 
 
+def _category_id(data: Dict) -> Optional[str]:
+    category = data.get("category") or {}
+    cid = category.get("id")
+    if cid and not _is_b64_hash(cid):
+        return cid
+    text = category.get("text")
+    if not text:
+        return cid
+    return text.strip().lower().replace(" ", "_").replace("-", "_")
+
+
+def _is_b64_hash(value: str) -> bool:
+    """creditsV2.category.id is a base64-gray hash; title-level credits use readable ids."""
+    return "/" in value or "+" in value or len(value) > 16
+
+
 def _to_credit(data: Dict) -> Optional[imdbapiNameCredit]:
     if not data:
         return None
     return imdbapiNameCredit(
         title=_to_credit_title(data.get("title")),
-        category=(data.get("category") or {}).get("id"),
+        category=_category_id(data),
     )
 
 
@@ -157,6 +173,47 @@ def _to_interest(data: Dict) -> Optional[imdbapiInterest]:
         ]
         or None,
     )
+
+
+async def _collect_episode_credits(
+    client,
+    name_id: str,
+    categories: Optional[List[str]],
+) -> tuple:
+    """Collect episode-level credits via creditsV2 (title credits exclude episodes)."""
+    after = None
+    episode_credits = []
+    episode_total = 0
+    for _ in range(50):
+        data = await client.graphql(
+            queries.NAME_EPISODE_CREDITS_QUERY,
+            {"id": name_id, "first": 200, "after": after},
+            "NameEpisodeCredits",
+        )
+        conn = ((data.get("name") or {}).get("creditsV2")) or {}
+        for edge in conn.get("edges") or []:
+            for role in ((edge.get("node") or {}).get("creditedRoles") or {}).get("edges") or []:
+                role_node = role.get("node") or {}
+                category = _category_id(role_node)
+                if categories and category not in categories:
+                    continue
+                epc = role_node.get("episodeCredits") or {}
+                episode_total += epc.get("total") or 0
+                for ee in epc.get("edges") or []:
+                    en = ee.get("node") or {}
+                    title = en.get("title")
+                    if not title:
+                        continue
+                    credit = _to_credit(
+                        {"title": title, "category": {"id": category, "text": (role_node.get("category") or {}).get("text")}}
+                    )
+                    if credit:
+                        episode_credits.append(credit)
+        pi = conn.get("pageInfo") or {}
+        after = pi.get("endCursor")
+        if not pi.get("hasNextPage"):
+            break
+    return episode_credits, episode_total
 
 
 async def list_name_filmography(
@@ -184,9 +241,13 @@ async def list_name_filmography(
         c for c in (_to_credit((e.get("node") or {})) for e in (credits_data.get("edges") or []))
         if c
     ]
+    episode_credits, episode_total = await _collect_episode_credits(client, name_id, categories)
+    total_count = (credits_data.get("total") or 0) + episode_total
+    if not page_token:
+        credits = credits + episode_credits
     return imdbapiListNameFilmographyResponse(
         credits=credits,
-        totalCount=credits_data.get("total"),
+        totalCount=total_count,
         nextPageToken=_page_info(credits_data),
     )
 

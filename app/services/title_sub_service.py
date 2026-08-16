@@ -99,17 +99,23 @@ async def list_title_credits(
                 name.primaryImage = imdbapiImage(
                     url=img.get("url"), width=img.get("width"), height=img.get("height")
                 )
+            akas = [(a.get("node") or {}).get("text") for a in (nm.get("akas") or {}).get("edges") or []]
+            akas = [a for a in akas if a]
+            if akas:
+                name.alternativeNames = akas
+            profs = [(p.get("category") or {}).get("id") or (p.get("category") or {}).get("text") for p in nm.get("primaryProfessions") or []]
+            profs = sorted([p.lower() for p in profs if p])
+            if profs:
+                name.primaryProfessions = profs
         characters = None
         chars = node.get("characters") or []
         if chars:
             characters = [c.get("name") for c in chars if c.get("name")]
-        episode_count = ((node.get("episodeCredits") or {}).get("total"))
         credits.append(
             imdbapiCredit(
                 name=name,
-                category=(node.get("category") or {}).get("text"),
+                category=(node.get("category") or {}).get("id"),
                 characters=characters,
-                episodeCount=episode_count,
             )
         )
     return imdbapiListTitleCreditsResponse(
@@ -299,6 +305,7 @@ async def list_title_videos(
         ct = node.get("contentType") or {}
         rt = node.get("runtime") or {}
         thumb = node.get("thumbnail") or {}
+        dims = node.get("videoDimensions") or {}
         videos.append(
             imdbapiVideo(
                 id=node.get("id"),
@@ -308,6 +315,8 @@ async def list_title_videos(
                 primaryImage=imdbapiImage(
                     url=thumb.get("url"), width=thumb.get("width"), height=thumb.get("height")
                 ) if thumb.get("url") else None,
+                width=dims.get("width") or None,
+                height=dims.get("height") or None,
                 runtimeSeconds=rt.get("value"),
             )
         )
@@ -330,36 +339,34 @@ async def list_title_award_nominations(
     data = await client.graphql(query, {"id": tid}, "GetAwards")
     conn = (data.get("title") or {}).get("awardNominations") or {}
     awards = []
-    win_count = 0
-    nom_count = 0
     for edge in conn.get("edges") or []:
         node = edge.get("node") or {}
         a = node.get("award") or {}
         event = a.get("event") or {}
-        winners_names = []
-        ents = node.get("awardedEntities") or {}
-        for ent in ents.get("secondaryAwardNames") or []:
-            nm = (ent.get("name") or {})
-            if nm.get("id"):
-                winners_names.append(
-                    imdbapiName(id=nm.get("id"), displayName=(nm.get("nameText") or {}).get("text"))
-                )
-        if node.get("isWinner"):
-            win_count += 1
-        else:
-            nom_count += 1
         awards.append(
             imdbapiAwardNomination(
-                nominees=winners_names or None,
                 event=imdbapiEvent(id=event.get("id"), name=event.get("text")),
                 year=(a.get("eventEdition") or {}).get("year"),
                 text=a.get("text"),
                 category=(a.get("category") or {}).get("text"),
                 isWinner=node.get("isWinner"),
+                winnerRank=node.get("winningRank"),
             )
         )
+    stats = None
+    try:
+        sdata = await client.graphql(queries.AWARDS_STATS_QUERY, {"id": tid}, "GetAwardsStats")
+        st = (sdata.get("title") or {})
+        all_total = ((st.get("all") or {}).get("total")) or 0
+        win_total = ((st.get("wins") or {}).get("total")) or 0
+        if all_total or win_total:
+            stats = imdbapiAwardNominationStats(
+                nominationCount=max(all_total - win_total, 0), winCount=win_total
+            )
+    except Exception:
+        stats = None
     return imdbapiListTitleAwardNominationsResponse(
-        stats=imdbapiAwardNominationStats(nominationCount=nom_count, winCount=win_count),
+        stats=stats,
         awardNominations=awards,
         nextPageToken=_page_info(conn),
     )
@@ -482,8 +489,18 @@ async def get_title_box_office(
     owg_gross = (owg.get("gross") or {}).get("total") or {}
     opening = None
     if owg_gross.get("amount") is not None:
+        weekend_end = None
+        wed = owg.get("weekendEndDate")
+        if isinstance(wed, str) and len(wed) >= 10:
+            try:
+                weekend_end = imdbapiPrecisionDate(
+                    year=int(wed[0:4]), month=int(wed[5:7]), day=int(wed[8:10])
+                )
+            except ValueError:
+                weekend_end = None
         opening = imdbapiOpeningWeekendGross(
-            gross=imdbapiMoney(amount=str(owg_gross["amount"]), currency=owg_gross.get("currency"))
+            gross=imdbapiMoney(amount=str(owg_gross["amount"]), currency=owg_gross.get("currency")),
+            weekendEndDate=weekend_end,
         )
 
     result = imdbapiBoxOffice(

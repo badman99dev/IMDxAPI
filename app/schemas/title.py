@@ -14,7 +14,7 @@ from .common import (
     imdbapiMetacritic,
     imdbapiRating,
 )
-from .name import imdbapiName
+from .common import imdbapiName
 
 
 class imdbapiTitle(BaseModel):

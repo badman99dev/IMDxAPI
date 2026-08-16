@@ -4,7 +4,14 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from ..schemas.common import imdbapiImage, imdbapiInterest, imdbapiRating
+from ..schemas.common import (
+    imdbapiCountry,
+    imdbapiImage,
+    imdbapiInterest,
+    imdbapiMetacritic,
+    imdbapiPrecisionDate,
+    imdbapiRating,
+)
 from ..schemas.name import (
     imdbapiGetInterestResponse,
     imdbapiListInterestCategoriesResponse,
@@ -15,12 +22,12 @@ from ..schemas.name import (
     imdbapiListStarMetersResponse,
     imdbapiName,
     imdbapiNameCredit,
-    imdbapiNameCreditTitle,
     imdbapiNameMeterRanking,
     imdbapiNameRelationship,
     imdbapiNameTrivia,
     imdbapiInterestCategory,
 )
+from ..schemas.title import imdbapiTitle
 from . imdb_client import ImdbClient
 from . import queries
 
@@ -59,54 +66,75 @@ def _to_meter(data: Dict) -> Optional[imdbapiNameMeterRanking]:
 def _to_light_name(data: Dict) -> Optional[imdbapiName]:
     if not data:
         return None
+    height_cm = None
+    if data.get("height") and (data["height"].get("measurement") or {}).get("value"):
+        try:
+            height_cm = int(data["height"]["measurement"]["value"])
+        except (ValueError, TypeError):
+            height_cm = None
     return imdbapiName(
         id=data.get("id"),
         displayName=(data.get("nameText") or {}).get("text"),
         primaryImage=_to_image(data.get("primaryImage")),
+        heightCm=height_cm,
+        birthDate=_to_precision_date(data.get("birthDate")),
+        deathDate=_to_precision_date(data.get("deathDate")),
         meterRanking=_to_meter(data.get("meterRanking")),
     )
 
 
-def _to_credit_title(data: Dict) -> Optional[imdbapiNameCreditTitle]:
+def _to_precision_date(data: Dict) -> Optional[dict]:
+    if not data:
+        return None
+    dc = data.get("dateComponents") or {}
+    if not any(dc.get(k) for k in ("year", "month", "day")):
+        return None
+    return imdbapiPrecisionDate(year=dc.get("year"), month=dc.get("month"), day=dc.get("day"))
+
+
+def _to_credit_title(data: Dict) -> Optional[imdbapiTitle]:
     if not data:
         return None
     release_year = data.get("releaseYear")
     rating = data.get("ratingsSummary") or {}
-    runtime = data.get("runtime") or {}
-    return imdbapiNameCreditTitle(
+    ms = (data.get("metacritic") or {}).get("metascore") or {}
+    genres = [
+        (((g or {}).get("genre") or {}).get("text"))
+        for g in ((data.get("titleGenres") or {}).get("genres") or [])
+    ]
+    genres = [g for g in genres if g] or None
+    countries = []
+    for c in (data.get("countriesOfOrigin") or {}).get("countries", []):
+        if c.get("text") or c.get("id"):
+            countries.append(imdbapiCountry(code=c.get("id"), name=c.get("text")))
+    return imdbapiTitle(
         id=data.get("id"),
         type=(data.get("titleType") or {}).get("id"),
         primaryTitle=(data.get("titleText") or {}).get("text"),
         primaryImage=_to_image(data.get("primaryImage")),
         startYear=release_year.get("year") if release_year else None,
-        endYear=(data.get("endYear") or {}).get("year"),
-        runtimeSeconds=runtime.get("seconds"),
+        genres=genres,
         rating=imdbapiRating(
             aggregateRating=rating.get("aggregateRating"),
             voteCount=rating.get("voteCount"),
         )
-        if rating
+        if rating.get("aggregateRating") is not None
         else None,
-        plot=(data.get("plot") or {}).get("plotText", {}).get("plainText")
-        if data.get("plot")
+        metacritic=imdbapiMetacritic(
+            score=ms.get("score"), reviewCount=ms.get("reviewCount")
+        )
+        if (ms.get("score") is not None or ms.get("reviewCount") is not None)
         else None,
+        originCountries=countries or None,
     )
 
 
 def _to_credit(data: Dict) -> Optional[imdbapiNameCredit]:
     if not data:
         return None
-    episode_count = None
-    ep = data.get("episodeCredits") or {}
-    total = ep.get("total")
-    if total is not None:
-        episode_count = total
     return imdbapiNameCredit(
         title=_to_credit_title(data.get("title")),
         category=(data.get("category") or {}).get("id"),
-        characters=[c.get("name") for c in (data.get("characters") or []) if c.get("name")]
-        or None,
-        episodeCount=episode_count,
     )
 
 
@@ -219,19 +247,38 @@ async def get_name_relationships(
             or (inner.get("nameText") or {}).get("text")
             or inner.get("id")
         )
+        if not (inner.get("id") or display):
+            continue
+        if not inner.get("id"):
+            continue
+        name = imdbapiName(id=inner.get("id"), displayName=display)
+        if inner.get("primaryImage"):
+            name.primaryImage = _to_image(inner["primaryImage"])
+        akas = [n.get("text") for n in ((inner.get("akas") or {}).get("edges") or [])]
+        akas = [a for a in akas if a]
+        if akas:
+            name.alternativeNames = akas
+        profs = [(p.get("category") or {}).get("text") for p in inner.get("primaryProfessions") or []]
+        cat_id = [(p.get("category") or {}).get("id") for p in inner.get("primaryProfessions") or []]
+        profs = sorted([(c or "").lower() for c in (cat_id or profs) if c])
+        if profs:
+            name.primaryProfessions = profs
+        rel_id = (node.get("relationshipType") or {}).get("id") or ""
+        rel_label = rel_id.replace("_is", "") if rel_id else None
+        if rel_label not in ("child", "parent", "sibling", "spouse"):
+            continue
         relationships.append(
             imdbapiNameRelationship(
-                name=imdbapiName(
-                    id=inner.get("id"),
-                    displayName=display,
-                    primaryImage=_to_image(inner.get("primaryImage")),
-                )
-                if (inner.get("id") or display)
-                else None,
-                relationType=(node.get("relationshipType") or {}).get("text"),
+                name=name if (inner.get("id") or display) else None,
+                relationType=rel_label,
                 attributes=None,
             )
         )
+    relationships.sort(
+        key=lambda r: {"child": 0, "parent": 1, "sibling": 2, "spouse": 3}.get(
+            r.relationType, 9
+        )
+    )
     return imdbapiListNameRelationshipsResponse(relationships=relationships)
 
 
@@ -356,7 +403,7 @@ async def batch_get_names(
     client: ImdbClient,
     name_ids: List[str],
 ) -> List[imdbapiName]:
-    """Fetch up to 5 names in a single query."""
+    """Fetch up to MAX_BATCH_TITLES names in a single query (full detail)."""
     from ..config import settings
 
     ids = [n if n.startswith("nm") else f"nm{n}" for n in name_ids][: settings.MAX_BATCH_TITLES]
@@ -367,22 +414,63 @@ async def batch_get_names(
     )
     names = []
     for node in data.get("names") or []:
-        display_name = (node.get("nameText") or {}).get("text")
         if not node.get("id"):
             continue
-        entry = imdbapiName(
-            id=node.get("id"),
-            displayName=display_name,
-            primaryImage=_to_image(node.get("primaryImage")),
-            meterRanking=_to_meter(node.get("meterRanking")),
-        )
-        professions = []
-        for p in node.get("primaryProfessions") or []:
-            text = (p.get("category") or {}).get("text")
-            if text:
-                professions.append(text.lower())
-        professions.sort()
-        if professions:
-            entry.primaryProfessions = professions
-        names.append(entry)
+        names.append(_to_full_name(node))
     return names
+
+
+def _to_full_name(data: Dict) -> Optional[imdbapiName]:
+    """Map a raw IMDb name GraphQL node to a full Tiffara imdbapiName."""
+    if not data:
+        return None
+
+    bios = data.get("bios") or {}
+    biography = None
+    for edge in (bios.get("edges") or []):
+        plain = (((edge or {}).get("node") or {}).get("text") or {}).get("plainText")
+        if plain:
+            biography = plain
+            break
+
+    professions = []
+    for p in data.get("primaryProfessions") or []:
+        cat = p.get("category") or {}
+        text = cat.get("id") or (cat.get("text") or "").lower()
+        if text:
+            professions.append(text)
+    professions.sort()
+
+    akas = []
+    for edge in (data.get("akas") or {}).get("edges", []):
+        text = (edge.get("node") or {}).get("text")
+        if text:
+            akas.append(text)
+
+    height_cm = None
+    if data.get("height") and (data["height"].get("measurement") or {}).get("value"):
+        try:
+            height_cm = int(data["height"]["measurement"]["value"])
+        except (ValueError, TypeError):
+            height_cm = None
+
+    birth_name = data.get("birthName")
+    if isinstance(birth_name, dict):
+        birth_name = birth_name.get("text")
+
+    return imdbapiName(
+        id=data.get("id"),
+        displayName=(data.get("nameText") or {}).get("text"),
+        primaryImage=_to_image(data.get("primaryImage")),
+        primaryProfessions=professions or None,
+        biography=biography,
+        heightCm=height_cm,
+        birthName=birth_name,
+        birthDate=_to_precision_date(data.get("birthDate")),
+        birthLocation=(data.get("birthLocation") or {}).get("text"),
+        deathDate=_to_precision_date(data.get("deathDate")),
+        deathLocation=(data.get("deathLocation") or {}).get("text"),
+        deathReason=data.get("deathCause"),
+        alternativeNames=akas or None,
+        meterRanking=None,
+    )

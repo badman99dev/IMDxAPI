@@ -14,7 +14,7 @@ from .common import (
     imdbapiPrecisionDate,
     imdbapiRating,
 )
-from .name import imdbapiName
+from .common import imdbapiName
 from .title import imdbapiTitle, imdbapiListTitlesResponse
 
 

@@ -42,9 +42,10 @@ def _to_name(data) -> Optional[imdbapiName]:
 
     professions = []
     for p in data.get("primaryProfessions") or []:
-        text = (p.get("category") or {}).get("text")
+        cat = p.get("category") or {}
+        text = cat.get("id") or (cat.get("text") or "").lower()
         if text:
-            professions.append(text.lower())
+            professions.append(text)
     professions.sort()
 
     akas = []

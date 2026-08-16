@@ -98,9 +98,10 @@ def _to_name(data: Optional[Dict], minimal: bool = True) -> Optional[imdbapiName
         name.alternativeNames = akas
     professions = []
     for p in data.get("primaryProfessions") or []:
-        text = (p.get("category") or {}).get("text")
+        cat = p.get("category") or {}
+        text = cat.get("id") or (cat.get("text") or "").lower()
         if text:
-            professions.append(text.lower())
+            professions.append(text)
     professions.sort()
     if professions:
         name.primaryProfessions = professions
@@ -139,9 +140,8 @@ def _to_title(data: Optional[Dict]) -> Optional[imdbapiTitle]:
     metacritic = data.get("metacritic") or {}
     metacritic_obj = None
     ms = metacritic.get("metascore") or {}
-    if metacritic.get("url") or ms.get("score") is not None or ms.get("reviewCount") is not None:
+    if ms.get("score") is not None or ms.get("reviewCount") is not None:
         metacritic_obj = imdbapiMetacritic(
-            url=metacritic.get("url"),
             score=ms.get("score"),
             reviewCount=ms.get("reviewCount"),
         )
@@ -207,7 +207,7 @@ def _to_title(data: Optional[Dict]) -> Optional[imdbapiTitle]:
         type=_map_type((data.get("titleType") or {}).get("text")),
         isAdult=data.get("isAdult") or None,
         primaryTitle=(data.get("titleText") or {}).get("text"),
-        originalTitle=(data.get("originalTitleText") or {}).get("text"),
+        originalTitle=None,
         primaryImage=_to_image(data.get("primaryImage")),
         startYear=(data.get("releaseYear") or {}).get("year"),
         endYear=(data.get("releaseYear") or {}).get("endYear"),

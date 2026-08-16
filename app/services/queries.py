@@ -163,15 +163,16 @@ query GetCredits($id: ID!) {{
       total
       edges {{
         node {{
-          name {{ nameText {{ text }} id primaryImage {{ url width height }} }}
-          category {{ text }}
+          name {{
+            nameText {{ text }}
+            id
+            primaryImage {{ url width height }}
+            akas(first: 20) {{ edges {{ node {{ text }} }} }}
+            primaryProfessions {{ category {{ text }} }}
+          }}
+          category {{ id text }}
           ... on Cast {{
             characters {{ name }}
-            episodeCredits(first: 9999) {{ total }}
-          }}
-          ... on Crew {{
-            jobs {{ text }}
-            episodeCredits(first: 9999) {{ total }}
           }}
         }}
       }}
@@ -332,6 +333,7 @@ query GetVideos($id: ID!, $first: Int!) {
           contentType { id }
           runtime { value }
           thumbnail { url width height }
+          videoDimensions { width height }
         }
       }
     }
@@ -353,6 +355,7 @@ query GetAwards($id: ID!) {{
         node {{
           id
           isWinner
+          winningRank
           award {{
             id
             text
@@ -361,20 +364,23 @@ query GetAwards($id: ID!) {{
             category {{ text }}
           }}
           notes {{ plainText }}
-          awardedEntities {{
-            ... on AwardedTitles {{
-              secondaryAwardNames {{
-                name {{ id nameText {{ text }} }}
-                note {{ plainText }}
-              }}
-            }}
-          }}
         }}
       }}
       pageInfo {{ hasNextPage endCursor }}
     }}
   }}
 }}
+"""
+
+
+# --- Awards: stats (full counts; wins filtered separately) ---
+AWARDS_STATS_QUERY = """
+query GetAwardsStats($id: ID!) {
+  title(id: $id) {
+    all: awardNominations(first: 1) { total }
+    wins: awardNominations(first: 1, filter: {wins: WINS_ONLY}) { total }
+  }
+}
 """
 
 
@@ -455,7 +461,7 @@ query GetBoxOffice($id: ID!) {
     productionBudget { budget { amount currency } }
     lifetimeGross(boxOfficeArea: DOMESTIC) { total { amount currency } }
     lifetimeGrossWorld: lifetimeGross(boxOfficeArea: WORLDWIDE) { total { amount currency } }
-    openingWeekendGross(boxOfficeArea: DOMESTIC) { gross { total { amount currency } } }
+    openingWeekendGross(boxOfficeArea: DOMESTIC) { gross { total { amount currency } } weekendEndDate }
   }
 }
 """
@@ -491,6 +497,7 @@ query GetName($id: ID!) {
 
 # --- Phase-3: Name filmography (credits) -------------------------------- #
 # Categories are raw ID strings e.g. "actor", "director", "archive_footage".
+# Credit title maps to a full imdbapiTitle (genres/metacritic/originCountries).
 NAME_CREDITS_QUERY = """
 query NameCredits($id: ID!, $first: Int!, $after: ID, $categories: [ID!]) {
   name(id: $id) {
@@ -498,24 +505,17 @@ query NameCredits($id: ID!, $first: Int!, $after: ID, $categories: [ID!]) {
       total
       pageInfo { hasNextPage endCursor }
       edges { node {
-        __typename
         category { id text }
         title {
           id
           titleText { text }
-          titleType { id text }
+          titleType { id }
           releaseYear { year endYear }
           primaryImage { url width height }
           ratingsSummary { aggregateRating voteCount }
-          runtime { seconds }
-          plot { plotText { plainText } }
-        }
-        ... on Cast {
-          characters { name }
-          episodeCredits(first: 1) { total }
-        }
-        ... on Crew {
-          episodeCredits(first: 1) { total }
+          titleGenres { genres { genre { text } } }
+          metacritic { metascore { score reviewCount } }
+          countriesOfOrigin { countries { id text } }
         }
       } }
     }
@@ -548,7 +548,9 @@ query NameRelations($id: ID!, $first: Int!) {
         id
         relationName {
           nameText
-          name { id nameText { text } primaryImage { url width height } }
+          name { id nameText { text } primaryImage { url width height }
+                akas(first: 20) { edges { node { text } } }
+                primaryProfessions { category { text } } }
         }
         relationshipType { id text }
       } }
@@ -585,10 +587,10 @@ query StarMeter($first: Int!, $after: String) {
       id
       nameText { text }
       primaryImage { url width height }
+      birthDate { dateComponents { year month day } }
+      deathDate { dateComponents { year month day } }
+      height { measurement { value } }
       meterRanking { currentRank rankChange { changeDirection difference } }
-      knownFor(first: 3) {
-        edges { node { title { id titleText { text } releaseYear { year } } } }
-      }
     } }
   }
 }
@@ -644,8 +646,16 @@ query BatchNames($ids: [ID!]!) {
     id
     nameText { text }
     primaryImage { url width height }
-    meterRanking { currentRank rankChange { changeDirection difference } }
+    akas(first: 50) { edges { node { text } } }
     primaryProfessions { category { text } }
+    bios(first: 5) { edges { node { text { plainText } } } }
+    birthDate { dateComponents { year month day } }
+    deathDate { dateComponents { year month day } }
+    birthName { text }
+    birthLocation { text }
+    deathLocation { text }
+    deathCause { text }
+    height { measurement { value } }
   }
 }
 """

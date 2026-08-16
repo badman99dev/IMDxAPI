@@ -407,7 +407,15 @@ def _build_constraints(
         votes_parts.append(f"min: {min_votes}")
     if max_votes is not None:
         votes_parts.append(f"max: {max_votes}")
-    if votes_parts:
+
+    # Tiffara sends a single userRatingsConstraint with BOTH ranges.
+    if rating_parts and votes_parts:
+        parts.pop()
+        parts.append(
+            f"userRatingsConstraint: {{ aggregateRatingRange: {{ {', '.join(rating_parts)} }}"
+            f" ratingsCountRange: {{ {', '.join(votes_parts)} }} }}"
+        )
+    elif votes_parts:
         parts.append(f"userRatingsConstraint: {{ ratingsCountRange: {{ {', '.join(votes_parts)} }} }}")
 
     return " ".join(filter(None, parts))

@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import List, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
-from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from .config import settings
 from .schemas.params import SortOrder, TitleSortBy
@@ -56,6 +59,16 @@ app = FastAPI(
     contact={"name": "Telegram Group", "url": "https://t.me/imdbapi"},
 )
 
+STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 async def get_client() -> ImdbClient:
     """Request-scoped IMDb GraphQL client."""
@@ -92,7 +105,15 @@ async def imdb_error_handler(request: Request, exc: ImdbError):
 
 @app.get("/", include_in_schema=False)
 async def root():
-    return {"name": "IMDxAPI", "version": "2.7.12", "docs": "/docs"}
+    return FileResponse(STATIC_DIR / "index.html")
+
+
+@app.get("/docs", include_in_schema=False)
+async def docs_redirect():
+    return FileResponse(STATIC_DIR / "index.html")
+
+
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
 # --------------------------------------------------------------------------- #

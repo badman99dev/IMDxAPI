@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any, Dict, List, Optional
 
 from ..config import settings
@@ -20,6 +21,7 @@ from ..schemas.title import (
     imdbapiListTitlesResponse,
     imdbapiSearchTitlesResponse,
     imdbapiTitle,
+    imdbapiTitleSummary,
 )
 from . imdb_client import ImdbClient
 from . import queries
@@ -63,9 +65,44 @@ SORT_FIELD_MAP = {
     TitleSortBy.SORT_BY_POPULARITY: "POPULARITY",
     TitleSortBy.SORT_BY_RELEASE_DATE: "RELEASE_DATE",
     TitleSortBy.SORT_BY_USER_RATING: "USER_RATING",
-    TitleSortBy.SORT_BY_USER_RATING_COUNT: "NUM_VOTES",
-    TitleSortBy.SORT_BY_YEAR: "RELEASE_DATE",
+    TitleSortBy.SORT_BY_USER_RATING_COUNT: "USER_RATING_COUNT",
+    TitleSortBy.SORT_BY_YEAR: "YEAR",
 }
+
+# --- Tiffara types enum -> GraphQL titleType ids ---
+# Accepts uppercase enum (MOVIE, TV_SERIES...), camelCase (tvSeries...) and
+# any casing that maps to a known GraphQL title type id.
+TYPES_FILTER_MAP = {
+    "MOVIE": "movie",
+    "TV_SERIES": "tvSeries",
+    "TV_MINI_SERIES": "tvMiniSeries",
+    "TV_SPECIAL": "tvSpecial",
+    "TV_MOVIE": "tvMovie",
+    "SHORT": "short",
+    "VIDEO": "video",
+    "VIDEO_GAME": "videoGame",
+    "movie": "movie",
+    "tvSeries": "tvSeries",
+    "tvMiniSeries": "tvMiniSeries",
+    "tvSpecial": "tvSpecial",
+    "tvMovie": "tvMovie",
+    "short": "short",
+    "video": "video",
+    "videoGame": "videoGame",
+}
+
+# Default type filter Tiffara always injects when `types` is absent.
+DEFAULT_TITLE_TYPES = ["movie", "tvSeries", "tvMiniSeries", "tvMovie", "tvSpecial", "short"]
+
+
+def _map_type_filter(raw: str) -> Optional[str]:
+    """Map a Tiffara types value to its GraphQL titleType id (case-insensitive)."""
+    key = raw.strip()
+    if key in TYPES_FILTER_MAP:
+        return TYPES_FILTER_MAP[key]
+    # best-effort camelCase/spaced forms (e.g. "TV Mini Series")
+    normalized = key.replace(" ", "_").replace("-", "_").upper()
+    return TYPES_FILTER_MAP.get(normalized) or TYPES_FILTER_MAP.get(key.lower())
 
 
 def _map_type(raw: Optional[str]) -> Optional[str]:
@@ -236,6 +273,50 @@ def _to_title(data: Optional[Dict]) -> Optional[imdbapiTitle]:
     )
 
 
+def _to_title_summary(data: Optional[Dict]) -> Optional[imdbapiTitleSummary]:
+    """Map a raw IMDb title node to the minimal Tiffara list-item shape (10 keys).
+
+    Matches Tiffara's /titles response: id, type, primaryTitle, originalTitle,
+    primaryImage, startYear, runtimeSeconds, genres, rating, plot.
+    """
+    if not data:
+        return None
+
+    rating = data.get("ratingsSummary") or {}
+    rating_obj = None
+    if rating.get("aggregateRating") is not None:
+        rating_obj = imdbapiRating(
+            aggregateRating=rating.get("aggregateRating"),
+            voteCount=rating.get("voteCount"),
+        )
+
+    genres = None
+    genre_list = []
+    for g in (data.get("titleGenres") or {}).get("genres", []):
+        genre = (g or {}).get("genre") or {}
+        if genre.get("text"):
+            genre_list.append(genre["text"])
+    if genre_list:
+        genres = genre_list
+
+    plot = None
+    if data.get("plot") and (data["plot"].get("plotText") or {}).get("plainText"):
+        plot = data["plot"]["plotText"]["plainText"]
+
+    return imdbapiTitleSummary(
+        id=data.get("id"),
+        type=_map_type((data.get("titleType") or {}).get("text")),
+        primaryTitle=(data.get("titleText") or {}).get("text"),
+        originalTitle=(data.get("originalTitleText") or {}).get("text"),
+        primaryImage=_to_image(data.get("primaryImage")),
+        startYear=(data.get("releaseYear") or {}).get("year"),
+        runtimeSeconds=((data.get("runtime") or {}).get("seconds")),
+        genres=genres,
+        rating=rating_obj,
+        plot=plot,
+    )
+
+
 def _apply_sort_and_constraints(
     query: str, sort_by: TitleSortBy, sort_order: SortOrder, constraints: str
 ) -> str:
@@ -254,20 +335,49 @@ def _apply_sort_and_constraints(
 
 
 def _build_constraints(
-    genres=None, types=None, name_ids=None, start_year=None, end_year=None,
+    genres=None, types=None, name_ids=None, country_codes=None,
+    language_codes=None, interest_ids=None, start_year=None, end_year=None,
     min_rating=None, max_rating=None, min_votes=None, max_votes=None,
 ) -> str:
-    """Build advanced search constraints from Tiffara filter params."""
+    """Build advanced search constraints from Tiffara filter params.
+
+    Mirrors Tiffara's GraphQL mapping (verified against api.graphql.imdb.com):
+      - types           -> titleTypeConstraint.anyTitleTypeIds
+      - genres          -> genreConstraint.allGenreIds        (AND, exact case)
+      - country_codes   -> originCountryConstraint.allCountries (AND)
+      - language_codes  -> languageConstraint.allLanguages      (AND)
+      - interest_ids    -> interestConstraint.allInterestIds    (AND)
+      - name_ids        -> creditedNameConstraint.anyNameIds
+      - start/end_year  -> releaseDateConstraint.releaseDateRange
+      - min/max_rating  -> userRatingsConstraint.aggregateRatingRange
+      - min/max_votes   -> userRatingsConstraint.ratingsCountRange
+    """
     parts = []
 
     if types:
-        graphql_types = [_map_type(t) for t in types]
+        graphql_types = [_map_type_filter(t) for t in types]
+        graphql_types = [t for t in graphql_types if t]
+    else:
+        graphql_types = list(DEFAULT_TITLE_TYPES)
+    if graphql_types:
         joined = '","'.join(graphql_types)
         parts.append(f'titleTypeConstraint: {{ anyTitleTypeIds: ["{joined}"] }}')
 
     if genres:
         joined = '","'.join(genres)
         parts.append(f'genreConstraint: {{ allGenreIds: ["{joined}"] }}')
+
+    if country_codes:
+        joined = '","'.join(country_codes)
+        parts.append(f'originCountryConstraint: {{ allCountries: ["{joined}"] }}')
+
+    if language_codes:
+        joined = '","'.join(language_codes)
+        parts.append(f'languageConstraint: {{ allLanguages: ["{joined}"] }}')
+
+    if interest_ids:
+        joined = '","'.join(interest_ids)
+        parts.append(f'interestConstraint: {{ allInterestIds: ["{joined}"] }}')
 
     if name_ids:
         ids = []
@@ -298,9 +408,8 @@ def _build_constraints(
     if max_votes is not None:
         votes_parts.append(f"max: {max_votes}")
     if votes_parts:
-        parts.append(f"userRatingsConstraint: {{ numVotesRange: {{ {', '.join(votes_parts)} }} }}")
+        parts.append(f"userRatingsConstraint: {{ ratingsCountRange: {{ {', '.join(votes_parts)} }} }}")
 
-    parts.append("explicitContentConstraint: { explicitContentFilter: INCLUDE_ADULT }")
     return " ".join(filter(None, parts))
 
 
@@ -359,6 +468,9 @@ async def list_titles(
         genres=genres,
         types=types,
         name_ids=name_ids,
+        country_codes=country_codes,
+        language_codes=language_codes,
+        interest_ids=interest_ids,
         start_year=start_year,
         end_year=end_year,
         min_rating=min_aggregate_rating,
@@ -369,17 +481,38 @@ async def list_titles(
     query = _apply_sort_and_constraints(
         queries.ADVANCED_SEARCH_QUERY,
         sort_by or TitleSortBy.SORT_BY_POPULARITY,
-        sort_order or SortOrder.DESC,
+        sort_order or SortOrder.ASC,
         constraints,
     )
+    count_query = _apply_sort_and_constraints(
+        queries.ADVANCED_COUNT_QUERY,
+        sort_by or TitleSortBy.SORT_BY_POPULARITY,
+        sort_order or SortOrder.ASC,
+        constraints,
+    )
+    if not page_token:
+        # IMDb's mock `total` differs when `after` is present (even null).
+        # Tiffara computes the count on the first page WITHOUT an `after` arg.
+        # Remove both the arg and its unused variable declaration.
+        count_query = count_query.replace(", after: $after", ",")
+        count_query = count_query.replace("$first: Int!, $after: String", "$first: Int!")
     variables: Dict[str, Any] = {"first": min(limit, settings.MAX_PAGE_SIZE)}
     if page_token:
         variables["after"] = page_token
 
-    data = await client.graphql(query, variables, "AdvancedSearch")
+    # Total count comes from a dedicated count query with first:1 (mirrors Tiffara).
+    # NOTE: do NOT pass `after` on the first page (even None) — it changes the
+    # mock `total` reported by the GraphQL endpoint.
+    count_variables: Dict[str, Any] = {"first": 1}
+    if page_token:
+        count_variables["after"] = page_token
+    (count_data, data) = await asyncio.gather(
+        client.graphql(count_query, count_variables, "AdvancedSearchCount"),
+        client.graphql(query, variables, "AdvancedSearch"),
+    )
     adv = data.get("advancedTitleSearch") or {}
     edges = adv.get("edges") or []
-    titles = [_to_title((e.get("node") or {}).get("title")) for e in edges]
+    titles = [_to_title_summary((e.get("node") or {}).get("title")) for e in edges]
     titles = [t for t in titles if t]
 
     next_token = None
@@ -387,9 +520,11 @@ async def list_titles(
     if page_info.get("hasNextPage"):
         next_token = page_info.get("endCursor")
 
+    total = ((count_data.get("advancedTitleSearch") or {}).get("total")
+             or (adv.get("total") if adv.get("total") else None))
     return imdbapiListTitlesResponse(
         titles=titles,
-        totalCount=adv.get("total"),
+        totalCount=total,
         nextPageToken=next_token,
     )
 

@@ -122,6 +122,16 @@ query Search($searchTerm: String!, $first: Int!, $after: String) {
 
 # --- Advanced search (constraints/sort built dynamically in service) ---
 # The `{CONSTRAINTS}` and `{SORT}` placeholders are replaced by build_advanced_query().
+# Tiffara reports `totalCount` from a *separate* count query using `first: 1`;
+# this matches the real GraphQL `total` number, which is shape-dependent.
+ADVANCED_COUNT_QUERY = """
+query AdvancedSearchCount($first: Int!, $after: String) {
+  advancedTitleSearch(first: $first, after: $after{SORT}{CONSTRAINTS}) {
+    total
+  }
+}
+"""
+
 ADVANCED_SEARCH_QUERY = """
 query AdvancedSearch($first: Int!, $after: String) {
   advancedTitleSearch(first: $first, after: $after{SORT}{CONSTRAINTS}) {
@@ -137,6 +147,7 @@ query AdvancedSearch($first: Int!, $after: String) {
           primaryImage { url width height }
           runtime { seconds }
           ratingsSummary { aggregateRating voteCount }
+          titleGenres { genres { genre { text } } }
           plot { plotText { plainText } }
           metacritic { metascore { score } }
         }

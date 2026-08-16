@@ -55,10 +55,30 @@ class imdbapiTitle(BaseModel):
     )
 
 
+class imdbapiTitleSummary(BaseModel):
+    """Minimal title summary returned for list/search responses.
+
+    Matches Tiffara's /titles list item shape exactly (10 keys):
+    id, type, primaryTitle, originalTitle, primaryImage, startYear,
+    runtimeSeconds, genres, rating, plot.
+    """
+
+    id: Optional[str] = None
+    type: Optional[str] = None
+    primaryTitle: Optional[str] = None
+    originalTitle: Optional[str] = None
+    primaryImage: Optional[imdbapiImage] = None
+    startYear: Optional[int] = None
+    runtimeSeconds: Optional[int] = None
+    genres: Optional[List[str]] = None
+    rating: Optional[imdbapiRating] = None
+    plot: Optional[str] = None
+
+
 class imdbapiListTitlesResponse(BaseModel):
     """Response for listing/filtering titles."""
 
-    titles: List[imdbapiTitle] = Field(default_factory=list)
+    titles: List[imdbapiTitleSummary] = Field(default_factory=list)
     totalCount: Optional[int] = Field(None, description="Total matching titles.")
     nextPageToken: Optional[str] = Field(
         None, description="Token for the next page of results."

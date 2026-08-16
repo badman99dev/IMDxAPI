@@ -141,7 +141,7 @@ async def list_titles(
     minAggregateRating: Optional[float] = Query(None),
     maxAggregateRating: Optional[float] = Query(None),
     sortBy: Optional[TitleSortBy] = Query(TitleSortBy.SORT_BY_POPULARITY),
-    sortOrder: Optional[SortOrder] = Query(SortOrder.DESC),
+    sortOrder: Optional[SortOrder] = Query(SortOrder.ASC),
     pageToken: Optional[str] = Query(None),
     limit: int = Query(50, ge=1, le=50),
     client: ImdbClient = Depends(get_client),

@@ -487,3 +487,163 @@ query GetName($id: ID!) {
   }
 }
 """
+
+
+# --- Phase-3: Name filmography (credits) -------------------------------- #
+# Categories are raw ID strings e.g. "actor", "director", "archive_footage".
+NAME_CREDITS_QUERY = """
+query NameCredits($id: ID!, $first: Int!, $after: ID, $categories: [ID!]) {
+  name(id: $id) {
+    credits(first: $first, after: $after, filter: {categories: $categories}) {
+      total
+      pageInfo { hasNextPage endCursor }
+      edges { node {
+        __typename
+        category { id text }
+        title {
+          id
+          titleText { text }
+          titleType { id text }
+          releaseYear { year }
+          endYear { year }
+          primaryImage { url width height }
+          ratingsSummary { aggregateRating voteCount }
+          runtime { seconds }
+          plot { plotText { plainText } }
+        }
+        ... on Cast {
+          characters { name }
+          episodeCredits(first: 1) { total }
+        }
+        ... on Crew {
+          episodeCredits(first: 1) { total }
+        }
+      } }
+    }
+  }
+}
+"""
+
+
+# --- Phase-3: Name images ------------------------------------------------ #
+NAME_IMAGES_QUERY = """
+query NameImages($id: ID!, $first: Int!, $after: ID, $types: [ID!]) {
+  name(id: $id) {
+    images(first: $first, after: $after, filter: {types: $types}) {
+      total
+      pageInfo { hasNextPage endCursor }
+      edges { node { id type url width height caption { plainText } } }
+    }
+  }
+}
+"""
+
+
+# --- Phase-3: Name relationships ----------------------------------------- #
+NAME_RELATIONS_QUERY = """
+query NameRelations($id: ID!, $first: Int!) {
+  name(id: $id) {
+    relations(first: $first) {
+      total
+      edges { node {
+        id
+        relationName { nameText name { id primaryImage { url width height } } }
+        relationshipType { id text }
+      } }
+    }
+  }
+}
+"""
+
+
+# --- Phase-3: Name trivia ------------------------------------------------ #
+NAME_TRIVIA_QUERY = """
+query NameTrivia($id: ID!, $first: Int!, $after: ID) {
+  name(id: $id) {
+    trivia(first: $first, after: $after) {
+      total
+      pageInfo { hasNextPage endCursor }
+      edges { node {
+        id
+        text { plainText }
+        interestScore { usersVoted usersInterested }
+      } }
+    }
+  }
+}
+"""
+
+
+# --- Phase-3: StarMeter chart -------------------------------------------- #
+STARMETER_QUERY = """
+query StarMeter($first: Int!, $after: String) {
+  topMeterNames(first: $first, after: $after) {
+    pageInfo { hasNextPage endCursor }
+    edges { node {
+      id
+      nameText { text }
+      primaryImage { url width height }
+      meterRanking { currentRank rankChange { changeDirection difference } }
+      knownFor(first: 3) {
+        edges { node { title { id titleText { text } releaseYear { year } } } }
+      }
+    } }
+  }
+}
+"""
+
+
+# --- Phase-3: Interests -------------------------------------------------- #
+INTEREST_CATEGORIES_QUERY = """
+query InterestCategories($first: Int!, $after: ID) {
+  interestCategories(first: $first, after: $after) {
+    pageInfo { hasNextPage endCursor }
+    edges { node {
+      id
+      text
+      interests(first: 50) {
+        edges { node {
+          id
+          primaryText { text }
+          type
+          description { value { plainText } }
+          primaryImage { url width height }
+          similarInterests(first: 12) {
+            edges { node { id primaryText { text } } }
+          }
+        } }
+      }
+    } }
+  }
+}
+"""
+
+
+INTEREST_QUERY = """
+query Interest($id: ID!) {
+  interest(id: $id) {
+    id
+    primaryText { text }
+    type
+    description { value { plainText } }
+    primaryImage { url width height }
+    similarInterests(first: 20) {
+      edges { node { id primaryText { text } } }
+    }
+  }
+}
+"""
+
+
+# --- Phase-3: Batch names ------------------------------------------------- #
+BATCH_NAMES_QUERY = """
+query BatchNames($ids: [ID!]!) {
+  names(ids: $ids) {
+    id
+    nameText { text }
+    primaryImage { url width height }
+    meterRanking { currentRank rankChange { changeDirection difference } }
+    primaryProfessions { category { text } }
+  }
+}
+"""

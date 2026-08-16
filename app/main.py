@@ -30,14 +30,23 @@ from .schemas.sub import (
     imdbapiListTitleSeasonsResponse,
     imdbapiListTitleVideosResponse,
 )
-from .schemas.name import imdbapiName
+from .schemas.name import (
+    imdbapiGetInterestResponse,
+    imdbapiListInterestCategoriesResponse,
+    imdbapiListNameFilmographyResponse,
+    imdbapiListNameImagesResponse,
+    imdbapiListNameRelationshipsResponse,
+    imdbapiListNameTriviaResponse,
+    imdbapiListStarMetersResponse,
+    imdbapiName,
+)
 from .services.imdb_client import (
     ImdbClient,
     ImdbError,
     ImdbNotFoundError,
     ImdbRateLimitError,
 )
-from .services import title_service, name_service, title_sub_service
+from .services import title_service, name_service, title_sub_service, name_sub_service
 
 app = FastAPI(
     title="IMDxAPI",
@@ -410,4 +419,171 @@ async def get_name(nameId: str, client: ImdbClient = Depends(get_client)):
     result = await name_service.get_name(client, nameId)
     if not result:
         raise ImdbNotFoundError(f"Name {nameId} not found")
+    return result
+
+
+@app.get(
+    "/names/{nameId}/filmography",
+    response_model=imdbapiListNameFilmographyResponse,
+    response_model_exclude_none=True,
+    summary="List filmography for a name",
+    description="List a person's credits (actor, director, etc.) with pagination.",
+    tags=["Name"],
+)
+async def list_name_filmography(
+    nameId: str,
+    categories: Optional[List[str]] = Query(
+        None,
+        description="Filter by credit category, e.g. 'actor', 'director'.",
+    ),
+    pageSize: int = Query(50, ge=1, le=50),
+    pageToken: Optional[str] = Query(None),
+    client: ImdbClient = Depends(get_client),
+):
+    return await name_sub_service.list_name_filmography(
+        client, nameId, categories=categories,
+        page_token=pageToken, limit=pageSize,
+    )
+
+
+@app.get(
+    "/names/{nameId}/images",
+    response_model=imdbapiListNameImagesResponse,
+    response_model_exclude_none=True,
+    summary="List images for a name",
+    description="List a person's images, optionally filtered by image type.",
+    tags=["Name"],
+)
+async def list_name_images(
+    nameId: str,
+    types: Optional[List[str]] = Query(
+        None, description='Filter by image type, e.g. "poster", "still_frame".'
+    ),
+    pageSize: int = Query(50, ge=1, le=50),
+    pageToken: Optional[str] = Query(None),
+    client: ImdbClient = Depends(get_client),
+):
+    return await name_sub_service.list_name_images(
+        client, nameId, types=types, page_token=pageToken, limit=pageSize,
+    )
+
+
+@app.get(
+    "/names/{nameId}/relationships",
+    response_model=imdbapiListNameRelationshipsResponse,
+    response_model_exclude_none=True,
+    summary="List relationships for a name",
+    description="List a person's personal relationships (family, spouses, etc.).",
+    tags=["Name"],
+)
+async def list_name_relationships(
+    nameId: str,
+    pageSize: int = Query(50, ge=1, le=50),
+    client: ImdbClient = Depends(get_client),
+):
+    return await name_sub_service.get_name_relationships(
+        client, nameId, limit=pageSize,
+    )
+
+
+@app.get(
+    "/names/{nameId}/trivia",
+    response_model=imdbapiListNameTriviaResponse,
+    response_model_exclude_none=True,
+    summary="List trivia for a name",
+    description="List a person's trivia entries with pagination.",
+    tags=["Name"],
+)
+async def list_name_trivia(
+    nameId: str,
+    pageSize: int = Query(50, ge=1, le=50),
+    pageToken: Optional[str] = Query(None),
+    client: ImdbClient = Depends(get_client),
+):
+    return await name_sub_service.list_name_trivia(
+        client, nameId, page_token=pageToken, limit=pageSize,
+    )
+
+
+@app.get(
+    "/names:batchGet",
+    response_model=imdbapiName,
+    response_model_exclude_none=True,
+    summary="Batch get names by IDs",
+    description="Retrieve details of multiple names using their IMDb IDs. Maximum 5 IDs.",
+    tags=["Name"],
+    responses={
+        200: {
+            "description": "Batch result (returns array as 'names').",
+            "content": {
+                "application/json": {
+                    "example": {"names": []},
+                }
+            },
+        }
+    },
+)
+async def batch_get_names(
+    nameIds: Optional[List[str]] = Query(
+        None, description="List of IMDb name IDs. Maximum 5 IDs."
+    ),
+    client: ImdbClient = Depends(get_client),
+):
+    if not nameIds:
+        return {"names": []}
+    names = await name_sub_service.batch_get_names(client, nameIds)
+    return {"names": names}
+
+
+# --------------------------------------------------------------------------- #
+# Chart endpoints
+# --------------------------------------------------------------------------- #
+@app.get(
+    "/chart/starmeter",
+    response_model=imdbapiListStarMetersResponse,
+    response_model_exclude_none=True,
+    summary="List star meter rankings",
+    description="Return the IMDb StarMeter chart of top trending people.",
+    tags=["Chart"],
+)
+async def get_starmeter(
+    pageSize: int = Query(50, ge=1, le=50),
+    pageToken: Optional[str] = Query(None),
+    client: ImdbClient = Depends(get_client),
+):
+    return await name_sub_service.get_starmeter_chart(
+        client, page_token=pageToken, limit=pageSize,
+    )
+
+
+# --------------------------------------------------------------------------- #
+# Interest endpoints
+# --------------------------------------------------------------------------- #
+@app.get(
+    "/interests",
+    response_model=imdbapiListInterestCategoriesResponse,
+    response_model_exclude_none=True,
+    summary="List interest categories",
+    description="List all interest categories with their interests.",
+    tags=["Interest"],
+)
+async def list_interests(client: ImdbClient = Depends(get_client)):
+    return await name_sub_service.list_interest_categories(client)
+
+
+@app.get(
+    "/interests/{interestId}",
+    response_model=imdbapiGetInterestResponse,
+    response_model_exclude_none=True,
+    summary="Get interest by ID",
+    description="Retrieve a single interest by its IMDb ID (e.g. in0000001).",
+    tags=["Interest"],
+    responses={404: {"model": rpcStatus}},
+)
+async def get_interest(
+    interestId: str, client: ImdbClient = Depends(get_client)
+):
+    result = await name_sub_service.get_interest(client, interestId)
+    if not result:
+        raise ImdbNotFoundError(f"Interest {interestId} not found")
     return result

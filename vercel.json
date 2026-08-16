@@ -34,7 +34,7 @@
     { "source": "/names/(.*)/images",         "headers": [{ "key": "CDN-Cache-Control", "value": "max-age=3600, stale-while-revalidate=3600" }] },
     { "source": "/names/(.*)/relationships",  "headers": [{ "key": "CDN-Cache-Control", "value": "max-age=3600, stale-while-revalidate=3600" }] },
     { "source": "/names/(.*)",                "headers": [{ "key": "CDN-Cache-Control", "value": "max-age=3600, stale-while-revalidate=3600" }] },
-    { "source": "/titles/(.*)/?$",            "headers": [{ "key": "CDN-Cache-Control", "value": "max-age=3600, stale-while-revalidate=3600" }] },
+    { "source": "/titles/(.*)",               "headers": [{ "key": "CDN-Cache-Control", "value": "max-age=3600, stale-while-revalidate=3600" }] },
 
     { "source": "/titles/(.*)/credits",       "headers": [{ "key": "CDN-Cache-Control", "value": "max-age=300, stale-while-revalidate=300" }] },
     { "source": "/titles/(.*)/episodes",      "headers": [{ "key": "CDN-Cache-Control", "value": "max-age=300, stale-while-revalidate=300" }] },

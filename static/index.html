@@ -3,107 +3,36 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>IMDxAPI - API Docs</title>
+  <title>IMDxAPI - Swagger UI</title>
+  <link rel="stylesheet" href="/static/swagger-ui/swagger-ui.css">
   <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      height: 100%;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    }
-    .header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 12px 20px;
-      background: linear-gradient(135deg, #1e1b4b 0%, #4c1d95 50%, #7c3aed 100%);
-      color: #fff;
-    }
-    .header .brand {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      font-size: 18px;
-      font-weight: 700;
-    }
-    .header .brand .logo {
-      width: 32px;
-      height: 32px;
-      border-radius: 8px;
-      background: rgba(255, 255, 255, 0.15);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 16px;
-    }
-    .header .actions {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-    }
-    .header .btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 8px 16px;
-      border-radius: 8px;
-      font-size: 13px;
-      font-weight: 600;
-      text-decoration: none;
-      transition: transform 0.15s ease, box-shadow 0.15s ease;
-      border: none;
-      cursor: pointer;
-    }
-    .header .btn:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-    }
-    .header .btn-source {
-      background: #fff;
-      color: #4c1d95;
-    }
-    .header .btn-download {
-      background: rgba(255, 255, 255, 0.18);
-      color: #fff;
-      border: 1px solid rgba(255, 255, 255, 0.35);
-    }
-    #rapidoc-wrap {
-      height: calc(100vh - 57px);
-    }
-    rapi-doc {
-      width: 100%;
-      height: 100%;
-      display: block;
-    }
+    html { box-sizing: border-box; overflow-y: scroll; }
+    *, *::before, *::after { box-sizing: inherit; }
+    body { margin: 0; background: #fafafa; }
   </style>
 </head>
 <body>
-  <header class="header">
-    <div class="brand">
-      <span class="logo">🎬</span>
-      <span>IMDxAPI</span>
-    </div>
-    <div class="actions">
-      <a class="btn btn-download" href="/static/imdbapi.swagger.yaml" download>Download Spec</a>
-      <a class="btn btn-source" href="https://github.com/badman99dev/IMDxAPI" target="_blank" rel="noopener">💻 View Source Code</a>
-    </div>
-  </header>
-  <div id="rapidoc-wrap">
-    <rapi-doc
-      spec-url="/static/imdbapi.swagger.yaml"
-      theme="dark"
-      primary-color="#7c3aed"
-      render-style="view"
-      show-header="false"
-      show-sidebar="true"
-      allow-try="true"
-      schema-style="table"
-      show-schema="true"
-      regular-font="Inter"
-      mono-font="JetBrains Mono"
-      default-schema-tab="model"
-    ></rapi-doc>
-  </div>
-  <script type="module" src="/static/swagger-ui/rapidoc-min.js"></script>
+  <div id="swagger-ui"></div>
+  <script src="/static/swagger-ui/swagger-ui-bundle.js" charset="UTF-8"></script>
+  <script src="/static/swagger-ui/swagger-ui-standalone-preset.js" charset="UTF-8"></script>
+  <script>
+    window.onload = function () {
+      var base = window.location.href.replace(/\/+$/, "");
+      window.ui = SwaggerUIBundle({
+        url: base + "/static/imdbapi.swagger.yaml",
+        dom_id: "#swagger-ui",
+        deepLinking: false,
+        presets: [
+          SwaggerUIBundle.presets.apis,
+          SwaggerUIStandalonePreset
+        ],
+        plugins: [
+          SwaggerUIBundle.plugins.DownloadUrl
+        ],
+        layout: "BaseLayout",
+        validatorUrl: null
+      });
+    };
+  </script>
 </body>
 </html>

@@ -58,9 +58,9 @@ class imdbapiTitle(BaseModel):
 class imdbapiTitleSummary(BaseModel):
     """Minimal title summary returned for list/search responses.
 
-    Matches Tiffara's /titles list item shape exactly (10 keys):
+    Matches Tiffara's /titles list item shape exactly:
     id, type, primaryTitle, originalTitle, primaryImage, startYear,
-    runtimeSeconds, genres, rating, plot.
+    runtimeSeconds, genres, rating, plot (plus endYear for series).
     """
 
     id: Optional[str] = None
@@ -69,6 +69,7 @@ class imdbapiTitleSummary(BaseModel):
     originalTitle: Optional[str] = None
     primaryImage: Optional[imdbapiImage] = None
     startYear: Optional[int] = None
+    endYear: Optional[int] = None
     runtimeSeconds: Optional[int] = None
     genres: Optional[List[str]] = None
     rating: Optional[imdbapiRating] = None

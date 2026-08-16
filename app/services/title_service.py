@@ -310,6 +310,7 @@ def _to_title_summary(data: Optional[Dict]) -> Optional[imdbapiTitleSummary]:
         originalTitle=(data.get("originalTitleText") or {}).get("text"),
         primaryImage=_to_image(data.get("primaryImage")),
         startYear=(data.get("releaseYear") or {}).get("year"),
+        endYear=(data.get("releaseYear") or {}).get("endYear"),
         runtimeSeconds=((data.get("runtime") or {}).get("seconds")),
         genres=genres,
         rating=rating_obj,

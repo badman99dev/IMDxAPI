@@ -735,3 +735,24 @@ query BatchNames($ids: [ID!]!) {
   }
 }
 """
+
+
+# --- More like this (extra, not in Tiffara) -------------------------------- #
+GET_MORE_LIKE_THIS_QUERY = """
+query GetMoreLikeThis($id: ID!, $first: Int!) {
+  title(id: $id) {
+    moreLikeThisTitles(first: $first) {
+      edges {
+        node {
+          id
+          titleText { text }
+          releaseYear { year }
+          titleType { text }
+          primaryImage { url }
+          ratingsSummary { aggregateRating voteCount }
+        }
+      }
+    }
+  }
+}
+"""

@@ -76,7 +76,7 @@ app.add_middleware(
 CACHE_RULES = [
     (86400, ("parentsGuide", "/certificates", "/akas", "/releaseDates", "/trivia", "/interests")),
     (300, ("/credits", "/episodes", "/videos", "/boxOffice", "batchGet", "/filmography")),
-    (3600, ("/titles/", "/names/", "/seasons", "/images", "awardNominations", "companyCredits", "/relationships")),
+    (3600, ("/titles/", "/names/", "/seasons", "/images", "awardNominations", "companyCredits", "/relationships", "/moreLikeThis")),
     (60, ("/search/titles", "/chart/starmeter")),
     (300, ("/titles")),
 ]
@@ -414,6 +414,22 @@ async def get_title_box_office(
     if not result:
         raise ImdbNotFoundError(f"Title {titleId} not found")
     return result
+
+
+@app.get(
+    "/titles/{titleId}/moreLikeThis",
+    response_model=imdbapiListTitlesResponse,
+    response_model_exclude_none=True,
+    summary="Get similar titles",
+    description="Retrieve titles similar to a given title using IMDb recommendations.",
+    tags=["Title"],
+)
+async def list_title_more_like_this(
+    titleId: str,
+    limit: int = Query(20, ge=1, le=50, description="Maximum is 50."),
+    client: ImdbClient = Depends(get_client),
+):
+    return await title_sub_service.list_title_more_like_this(client, titleId, limit=limit)
 
 
 @app.get(

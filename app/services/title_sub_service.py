@@ -44,8 +44,10 @@ from ..schemas.sub import (
     imdbapiVideo,
     imdbapiYearsInvolved,
 )
+from ..schemas.title import imdbapiListTitlesResponse
 from . imdb_client import ImdbClient
 from . import queries
+from .title_service import _to_title_summary
 
 # IMDb parents-guide category id -> Tiffara enum
 PARENTS_GUIDE_MAP = {
@@ -542,3 +544,23 @@ async def get_title_box_office(
     if not any([result.domesticGross, result.worldwideGross, result.openingWeekendGross, result.productionBudget]):
         return None
     return result
+
+
+async def list_title_more_like_this(
+    client: ImdbClient, title_id: str, limit: int = 20
+) -> imdbapiListTitlesResponse:
+    """List titles similar to a given title (IMDb recommendations)."""
+    tid = title_id if title_id.startswith("tt") else f"tt{title_id}"
+    data = await client.graphql(
+        queries.GET_MORE_LIKE_THIS_QUERY, {"id": tid, "first": limit}, "GetMoreLikeThis"
+    )
+    edges = ((data.get("title") or {}).get("moreLikeThisTitles") or {}).get("edges") or []
+    titles = []
+    for edge in edges:
+        node = edge.get("node") or {}
+        if node.get("id") == tid:
+            continue
+        t = _to_title_summary(node)
+        if t:
+            titles.append(t)
+    return imdbapiListTitlesResponse(titles=titles)

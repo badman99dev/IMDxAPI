@@ -666,6 +666,36 @@ paths:
           type: string
       tags:
         - Title
+  /titles/{titleId}/moreLikeThis:
+    get:
+      summary: Get similar titles
+      description: Retrieve titles similar to a given title using IMDb recommendations.
+      operationId: IMDbAPIService_ListTitleMoreLikeThis
+      responses:
+        "200":
+          description: A successful response.
+          schema:
+            $ref: '#/definitions/imdbapiListTitlesResponse'
+        default:
+          description: An unexpected error response.
+          schema:
+            $ref: '#/definitions/rpcStatus'
+      parameters:
+        - name: titleId
+          description: Required. IMDb title ID in the format "tt1234567".
+          in: path
+          required: true
+          type: string
+        - name: limit
+          description: |-
+            Optional. Limit the number of results returned.
+            Maximum is 50.
+          in: query
+          required: false
+          type: integer
+          format: int32
+      tags:
+        - Title
   /search/titles:
     get:
       summary: Search titles by query

@@ -40,6 +40,23 @@ vercel --prod
 
 `vercel.json` routes everything to `api/index.py` (Mangum adapter).
 
+## CDN Caching
+
+> **Important:** Edge caching is handled by the [Cloudflare Worker proxy](https://github.com/badman99dev/IMDxAPI/tree/main/cf_worker).
+> By default the backend does **NOT** set any CDN cache headers — the Worker does all the
+> caching work via `cf_worker/cdn_cache.js` (always active, no env needed).
+
+For **standalone deployment** (direct Vercel, without the Worker), enable the backend's
+own CDN cache headers by setting the env var:
+
+```bash
+CDN_CACHE=true vercel --prod
+```
+
+Without `CDN_CACHE=true`, responses pass through with no `CDN-Cache-Control` /
+`s-maxage` headers — this is intentional so the Worker (or your own CDN layer) controls
+caching.
+
 ## Project structure
 
 ```

@@ -85,6 +85,11 @@ CACHE_RULES = [
 @app.middleware("http")
 async def add_cache_headers(request: Request, call_next):
     resp = await call_next(request)
+    # Edge caching is handled by the Cloudflare Worker proxy (cf_worker/).
+    # Only apply CDN cache headers here when explicitly enabled via
+    # CDN_CACHE=true (standalone deployment without the Worker).
+    if not settings.CDN_CACHE:
+        return resp
     if request.method != "GET" or resp.status_code not in (200, 404) or request.url.path.startswith(("/docs", "/static", "/openapi")):
         return resp
     ttl = 60

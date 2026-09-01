@@ -24,6 +24,11 @@ class Settings:
     # TTL (seconds) for in-process response caching to respect IMDb rate limits
     CACHE_TTL = int(os.getenv("CACHE_TTL", "300"))
 
+    # CDN edge-caching headers. Default OFF — the Cloudflare Worker proxy
+    # (cf_worker/) handles edge caching. Set CDN_CACHE=true to enable these
+    # headers when deploying standalone (without the Worker).
+    CDN_CACHE = os.getenv("CDN_CACHE", "false").lower() in ("true", "1", "yes", "on")
+
     # Retry behaviour on transient failures / rate limits
     MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))
     TIMEOUT = float(os.getenv("TIMEOUT", "20"))

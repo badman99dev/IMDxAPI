@@ -18,6 +18,19 @@ const CF_INJECTED_HEADERS = [
   "x-real-ip",
 ];
 
+// Cache-Tag hierarchy — selective purging via POST /__purge.
+// Har response apne data type ke tags leta hai, taaki ek tag purge karte hi
+// us type ke saare cached responses invalidate ho jayen.
+function getCacheTags(pathname) {
+  const tags = [];
+  if (/^\/titles(\/|:|$)/.test(pathname)) tags.push("titles");
+  if (/^\/names(\/|:|$)/.test(pathname)) tags.push("names");
+  if (/^\/search\//.test(pathname)) tags.push("search");
+  if (/^\/chart\//.test(pathname)) tags.push("chart");
+  if (/^\/interests/.test(pathname)) tags.push("interests");
+  return tags;
+}
+
 async function fetchOrigin(url, request, origin) {
   const headers = new Headers(request.headers);
   for (const h of CF_INJECTED_HEADERS) {
@@ -43,10 +56,54 @@ function jsonError(status, message) {
   });
 }
 
+// POST /__purge — Workers Cache selective invalidation.
+// Body (JSON): {"tags":["titles"]} | {"pathPrefixes":["/titles/"]} | {"purgeEverything":true}
+// Auth: header `X-Purge-Key: <PURGE_KEY>` (env var / wrangler secret).
+async function handlePurge(request, env, ctx) {
+  if (request.method !== "POST") {
+    return jsonError(405, "method_not_allowed");
+  }
+  const key = request.headers.get("X-Purge-Key");
+  if (!key || key !== env.PURGE_KEY) {
+    return jsonError(401, "unauthorized");
+  }
+  let body = {};
+  try {
+    body = await request.json();
+  } catch (e) {
+    return jsonError(400, "invalid_json");
+  }
+  const opts = {};
+  if (body.purgeEverything) opts.purgeEverything = true;
+  else {
+    if (Array.isArray(body.tags)) opts.tags = body.tags;
+    if (Array.isArray(body.pathPrefixes)) opts.pathPrefixes = body.pathPrefixes;
+  }
+  if (!opts.purgeEverything && !opts.tags && !opts.pathPrefixes) {
+    return jsonError(400, "nothing_to_purge");
+  }
+  const result = await ctx.cache.purge(opts);
+  if (!result.success) {
+    return new Response(
+      JSON.stringify({ error: "purge_failed", errors: result.errors }),
+      { status: 500, headers: { "Content-Type": "application/json" } }
+    );
+  }
+  return new Response(JSON.stringify({ success: true, purged: opts }), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const origin = env.ORIGIN_BASE || PRIMARY;
+
+    // Internal purge endpoint — kabhi origin ko forward nahi karta.
+    if (url.pathname === "/__purge") {
+      return handlePurge(request, env, ctx);
+    }
 
     let resp;
     try {
@@ -74,6 +131,12 @@ export default {
     respHeaders.set("Access-Control-Allow-Origin", "*");
     respHeaders.set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
     respHeaders.set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Auth-Token, X-App-Version-Code, X-App-Version-Name");
+
+    // Attach Cache-Tag for cacheable responses (Workers Cache selective purge).
+    const tags = getCacheTags(url.pathname);
+    if (tags.length > 0) {
+      respHeaders.set("Cache-Tag", tags.join(","));
+    }
 
     return new Response(finalResp.body, {
       status: finalResp.status,

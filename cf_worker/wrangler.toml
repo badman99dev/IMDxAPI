@@ -1,6 +1,11 @@
 name = "imdxapi-proxy"
 main = "worker.js"
-compatibility_date = "2025-01-01"
+compatibility_date = "2026-09-02"
+
+[cache]
+enabled = true
+cross_version_cache = true
 
 [env.production.vars]
 ORIGIN_BASE = "https://imdxapi.vercel.app"
+PURGE_KEY = "fd921b93eab76ec85f068dda20c735d5421f410bd555efda"

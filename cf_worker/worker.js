@@ -108,7 +108,7 @@ export default {
     // Purge dashboard — static HTML page (browser se purge karne ke liye).
     if (url.pathname === "/__purge/dashboard") {
       return new Response(PURGE_DASHBOARD_HTML, {
-        headers: { "Content-Type": "text/html; charset=utf-8" },
+        headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "private, no-store" },
       });
     }
 

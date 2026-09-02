@@ -1,4 +1,5 @@
 import { applyCdnCache } from "./cdn_cache.js";
+import { PURGE_DASHBOARD_HTML } from "./purge_dashboard.js";
 
 const PRIMARY = "https://imdxapi.vercel.app"; // single origin
 
@@ -103,6 +104,12 @@ export default {
     // Internal purge endpoint — kabhi origin ko forward nahi karta.
     if (url.pathname === "/__purge") {
       return handlePurge(request, env, ctx);
+    }
+    // Purge dashboard — static HTML page (browser se purge karne ke liye).
+    if (url.pathname === "/__purge/dashboard") {
+      return new Response(PURGE_DASHBOARD_HTML, {
+        headers: { "Content-Type": "text/html; charset=utf-8" },
+      });
     }
 
     let resp;

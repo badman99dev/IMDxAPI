@@ -120,7 +120,7 @@ export const PURGE_DASHBOARD_HTML = `<!DOCTYPE html>
       });
       const data = await res.json().catch(function () { return { error: 'invalid response' }; });
       if (res.ok) show('✅ ' + JSON.stringify(data, null, 2), true);
-      else show('❌ HTTP ' + res.status + '\n' + JSON.stringify(data, null, 2), false);
+      else show('❌ HTTP ' + res.status + '\\n' + JSON.stringify(data, null, 2), false);
     } catch (e) {
       show('❌ Network error: ' + e.message, false);
     } finally {

@@ -6,6 +6,6 @@ compatibility_date = "2026-09-02"
 enabled = true
 cross_version_cache = true
 
-[env.production.vars]
+[vars]
 ORIGIN_BASE = "https://imdxapi.vercel.app"
 PURGE_KEY = "fd921b93eab76ec85f068dda20c735d5421f410bd555efda"
